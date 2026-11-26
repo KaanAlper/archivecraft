@@ -40,7 +40,7 @@ jobs:
           echo "ver=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Build release binaries
-        run: cargo build --release --bin archivecraft --bin archivecraft-cli
+        run: cargo build --release -p archivecraft -p archivecraft-cli
 
       - name: Package tar.gz
         run: |
@@ -147,7 +147,7 @@ jobs:
           echo "ver=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Build release binaries
-        run: cargo build --release --bin archivecraft --bin archivecraft-cli
+        run: cargo build --release -p archivecraft -p archivecraft-cli
 
       - name: Package portable zip
         shell: pwsh
