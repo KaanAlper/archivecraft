@@ -23,6 +23,22 @@ craft-libs UI, menu, dialog, settings and translation crates). Licensed **MIT OR
 - Optional error logging to file with configurable size limits, and low-priority background jobs
   under **Preferences ▸ System**.
 
+## Install (Linux one-liner)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/KaanAlper/archivecraft/main/scripts/install.sh | sh
+```
+
+This downloads the latest Linux release, verifies its `SHA256SUMS.txt` checksum, installs
+`archivecraft` and `archivecraft-cli` into `~/.local/bin`, and automatically installs the
+`.desktop` app menu entry, icon, and right-click context menus for detected file managers.
+
+To uninstall:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/KaanAlper/archivecraft/main/scripts/install.sh | sh -s -- --uninstall
+```
+
 ## Build
 
 ```sh
