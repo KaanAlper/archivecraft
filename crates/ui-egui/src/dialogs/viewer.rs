@@ -6,6 +6,9 @@ use crate::settings::Viewer as ViewerPrefs;
 use crate::state::App;
 use crate::{tf, tl};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static NEXT_VIEWER_ID: AtomicU64 = AtomicU64::new(1);
 
 enum Body {
     Text(String, &'static str),
@@ -14,6 +17,7 @@ enum Body {
 }
 
 pub struct Viewer {
+    id: u64,
     name: String,
     size: usize,
     body: Body,
@@ -75,13 +79,15 @@ impl Viewer {
         } else {
             Body::Bytes(hex_dump(&data, 64 * 1024))
         };
-        Viewer { name, size: data.len(), body, wrap: prefs.word_wrap, hex: false, raw: data, ask }
+        let id = NEXT_VIEWER_ID.fetch_add(1, Ordering::Relaxed);
+        Viewer { id, name, size: data.len(), body, wrap: prefs.word_wrap, hex: false, raw: data, ask }
     }
 
     pub fn show(&mut self, _app: &mut App, ctx: &egui::Context) -> Flow {
         let mut flow = Flow::Keep;
         let mut open = true;
-        window(tf!("Looking at {n}", n = self.name), "ac-viewer").open(&mut open).default_size([720.0, 520.0]).show(ctx, |ui| {
+        let wid = format!("ac-viewer-{}", self.id);
+        window(tf!("Looking at {n}", n = self.name), &wid).open(&mut open).default_size([720.0, 520.0]).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label(tf!("{n} bytes", n = archivecraft_engine::model::util::group_digits(self.size as u64)));
                 if let Body::Text(_, enc) = &self.body {

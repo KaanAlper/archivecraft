@@ -74,6 +74,6 @@ pub fn open_sink(path: &Path, opts: &CreateOptions, count: Arc<AtomicU64>) -> Re
         Format::Zip => Box::new(zipfmt::ZipSink::new(out_file(path, count)?, opts.level.min(9), pw, opts.zip_legacy_crypto)),
         Format::SevenZ => Box::new(sevenzfmt::SevenZSink::new(path, opts, pw, count)?),
         Format::Tar | Format::TarGz | Format::TarXz | Format::TarZst => Box::new(tarfmt::TarSink::new(path, opts, count)?),
-        Format::Rar => return Err(Error::Unsupported("RAR archives can only be read, never written".into())),
+        Format::Rar | Format::Iso => return Err(Error::Unsupported(format!("{} archives can only be read, never written", opts.format.label()))),
     })
 }

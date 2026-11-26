@@ -4,7 +4,7 @@
 use crate::dialogs;
 use crate::icons::{self, Icon};
 use crate::rows::{self, Row, RowRef, Sort, SortKey};
-use crate::settings::{ListKind, ThemeMode};
+use crate::settings::{ListKind, ThemeMode, UnderlineMode};
 use crate::state::{App, Place};
 use crate::{tf, tl};
 use archivecraft_engine::model::util::{format_time, human_size};
@@ -23,7 +23,7 @@ impl App {
                 Err(_) => r,
             }
         }
-        let (a, c, t, b, s, h) = (tl!("Archive"), tl!("Actions"), tl!("Tools"), tl!("Bookmarks"), tl!("Settings"), tl!("Help"));
+        let (a, c, t, b, s, h) = (tl!("File"), tl!("Actions"), tl!("Tools"), tl!("Bookmarks"), tl!("Settings"), tl!("Help"));
         let recent = tl!("Recently opened");
         let prefs = self.prefs.get();
         let mut rows = vec![sc(Row::new(&[&a], "archive.open", tl!("Open archive…")), "Ctrl+O"), Row::separator(&[&a])];
@@ -45,20 +45,23 @@ impl App {
             sc(Row::new(&[&a], "view.refresh", tl!("Reload list")), "F5"),
             sc(Row::new(&[&c], "act.add", tl!("Add files to an archive…")), "Ctrl+Shift+A"),
             sc(Row::new(&[&c], "act.extract", tl!("Unpack to a folder…")), "Ctrl+E"),
-            sc(Row::new(&[&c], "act.extract_here", tl!("Unpack here")), "Ctrl+Shift+E"),
             sc(Row::new(&[&c], "act.test", tl!("Check archive")), "Ctrl+T"),
             Row::separator(&[&c]),
             sc(Row::new(&[&c], "act.view", tl!("Look inside a file")), "F3"),
             sc(Row::new(&[&c], "act.delete", tl!("Remove")), "Delete"),
+            sc(Row::new(&[&c], "act.rename", tl!("Change name…")), "F2"),
+            Row::separator(&[&c]),
+            sc(Row::new(&[&c], "act.extract_here", tl!("Unpack here")), "Ctrl+Shift+E"),
             Row::new(&[&c], "act.note", tl!("Archive note…")),
             Row::new(&[&c], "act.recovery", tl!("Add recovery data…")),
-            Row::new(&[&t], "tool.guide", tl!("Step-by-step guide…")),
+            Row::new(&[&t], "tool.guide", tl!("Guide…")),
             Row::separator(&[&t]),
             Row::new(&[&t], "tool.convert", tl!("Convert archives…")),
             Row::new(&[&t], "tool.repair", tl!("Repair an archive…")),
             Row::separator(&[&t]),
             sc(Row::new(&[&t], "act.find", tl!("Search…")), "Ctrl+F"),
             sc(Row::new(&[&t], "act.info", tl!("Archive details")), "Ctrl+I"),
+            Row::new(&[&t], "tool.report", tl!("Generate report…")),
             Row::new(&[&t], "tool.bench", tl!("Speed test…")),
             sc(Row::new(&[&b], "bookmark.add", tl!("Bookmark this place")), "Ctrl+D"),
             Row::new(&[&b], "bookmark.manage", tl!("Manage bookmarks…")),
@@ -67,21 +70,23 @@ impl App {
         for (i, bm) in prefs.saved.bookmarks.iter().enumerate() {
             rows.push(Row::new(&[&b], format!("bookmark.go.{i}").as_str(), bm.name.clone()));
         }
-        let look = tl!("Look");
-        let style = tl!("List style");
+        let look = tl!("Themes");
+        let style = tl!("File list");
+        let impexp = tl!("Import and export");
         rows.extend([
-            sc(Row::new(&[&s], "prefs.open", tl!("Preferences…")), "Ctrl+,"),
+            sc(Row::new(&[&s], "prefs.open", tl!("Settings…")), "Ctrl+,"),
+            Row::new(&[&s, &impexp], "prefs.export", tl!("Export settings to file…")),
+            Row::new(&[&s, &impexp], "prefs.import", tl!("Import settings from file…")),
+            Row::new(&[&s], "history.clear", tl!("Clear history…")),
+            Row::separator(&[&s]),
+            Row::new(&[&s, &style], "list.details", tl!("Columns")),
+            Row::new(&[&s, &style], "list.names", tl!("Names only")),
             Row::new(&[&s, &look], "theme.system", tl!("Follow the system")),
             Row::new(&[&s, &look], "theme.light", tl!("Light")),
             Row::new(&[&s, &look], "theme.dark", tl!("Dark")),
-            Row::new(&[&s, &style], "list.details", tl!("Columns")),
-            Row::new(&[&s, &style], "list.names", tl!("Names only")),
             Row::separator(&[&s]),
-            Row::new(&[&s], "integration.install", tl!("Add ArchiveCraft to my file manager's right-click menu")),
-            Row::new(&[&s], "integration.remove", tl!("Take ArchiveCraft out of the right-click menu")),
-            Row::separator(&[&s]),
-            Row::new(&[&s], "history.clear", tl!("Forget recently opened")),
-            Row::new(&[&s], "diags.show", tl!("Last problems list…")),
+            sc(Row::new(&[&s], "diags.show", tl!("View log…")), "Ctrl+L"),
+            Row::new(&[&s], "diags.clear", tl!("Clear log")),
             Row::new(&[&h], "help.keys", tl!("Keyboard keys")),
             Row::new(&[&h], "help.about", tl!("About ArchiveCraft")),
         ]);
@@ -96,9 +101,10 @@ impl App {
         }
         self.menu_key = key;
         let rows = self.menu_rows();
-        let tops = [tl!("Archive"), tl!("Actions"), tl!("Tools"), tl!("Bookmarks"), tl!("Settings"), tl!("Help")];
+        let tops = [tl!("File"), tl!("Actions"), tl!("Tools"), tl!("Bookmarks"), tl!("Settings"), tl!("Help")];
         let tops_ref: Vec<&str> = tops.iter().map(String::as_str).collect();
         let mut bar = craft_menu::from_items(&tops_ref, &rows);
+        bar.tag_menu(&tops[0], craft_menu::MenuRole::File);
         bar.tag_menu(&tops[5], craft_menu::MenuRole::Help);
         let laid = craft_menu::layout(&bar, craft_menu::Target::current(), &craft_menu::LayoutOptions::new("ArchiveCraft")).bar;
         self.menu = craft_tracked::Tracked::new(laid);
@@ -168,6 +174,7 @@ impl App {
                 self.ui_state.convert = Some(dialogs::tools::ConvertDialog::new(sources, self.disk_dir()));
             }
             "tool.repair" => self.act_repair(),
+            "tool.report" => self.act_report(),
             "tool.bench" => self.ui_state.bench = Some(dialogs::tools::BenchWindow::default()),
             "bookmark.add" => {
                 let (path, inner) = match &self.place {
@@ -181,6 +188,8 @@ impl App {
             }
             "bookmark.manage" => self.ui_state.bookmarks = Some(dialogs::tools::BookmarksWindow::default()),
             "prefs.open" => self.ui_state.prefs = Some(dialogs::prefs::PrefsDialog::new(self)),
+            "prefs.export" => self.pick(crate::state::Pick::PrefsExport, craft_dialogs::Kind::Save, tl!("Export settings"), None, Some("archivecraft-settings.json".into()), false),
+            "prefs.import" => self.pick(crate::state::Pick::PrefsImport, craft_dialogs::Kind::Open { multiple: false }, tl!("Import settings"), None, None, false),
             "theme.system" => {
                 self.prefs.update(|p| p.interface.theme = ThemeMode::System);
             }
@@ -213,6 +222,10 @@ impl App {
                 Some(d) => self.ui_state.diags = Some(d),
                 None => self.note(tl!("No problems so far.")),
             },
+            "diags.clear" => {
+                self.ui_state.last_diags = None;
+                self.note(tl!("Log cleared."));
+            }
             "help.keys" => self.ui_state.message = Some(dialogs::progress::MessageBox::info(dialogs::tools::keys_help())),
             "help.about" => self.ui_state.message = Some(dialogs::progress::MessageBox::info(dialogs::tools::about_text())),
             other => {
@@ -568,10 +581,31 @@ impl App {
             });
         };
         // Right-click on empty space opens the same menu (registered first, so rows win where they are).
-        let background = ui.interact(ui.max_rect(), ui.scope_id().with("ac-list-bg"), Sense::click());
+        let list_rect = ui.max_rect();
+        let background = ui.interact(list_rect, ui.scope_id().with("ac-list-bg"), Sense::click_and_drag());
         if background.clicked() {
             self.selected.clear();
         }
+        let mut idx_rects: Vec<(usize, Rect)> = Vec::new();
+        let pointer_origin = ui.input(|i| i.pointer.press_origin().or_else(|| i.pointer.interact_pos()));
+        let mut marquee_start: Option<egui::Pos2> = None;
+        let underline_all = prefs.single_click_opens && prefs.underline == UnderlineMode::Always;
+        let list_text = |s: &str, italic: bool, underline: bool| {
+            let mut rt = RichText::new(s).size(prefs.font_size);
+            if prefs.font_mono {
+                rt = rt.monospace();
+            }
+            if prefs.font_bold {
+                rt = rt.strong();
+            }
+            if italic {
+                rt = rt.italics();
+            }
+            if underline {
+                rt = rt.underline();
+            }
+            rt
+        };
         if prefs.kind == ListKind::Names {
             self.hud.headers = vec![tl!("Name")];
             egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
@@ -579,15 +613,27 @@ impl App {
                     let resp = ui
                         .horizontal(|ui| {
                             icons::show(ui, Self::row_icon(row), 16.0);
-                            ui.add(egui::Button::selectable(selected.contains(&i), &row.name).frame_when_inactive(false))
+                            ui.add(egui::Button::selectable(selected.contains(&i), list_text(&row.name, row.locked, underline_all)).frame_when_inactive(false).sense(Sense::click_and_drag()))
                         })
                         .inner;
                     self.row_rects.insert(row.name.clone(), resp.rect);
+                    idx_rects.push((i, resp.rect));
                     if resp.clicked() {
                         clicked = Some((i, mods));
+                        if prefs.single_click_opens {
+                            activated = Some(i);
+                        }
                     }
                     if resp.double_clicked() {
                         activated = Some(i);
+                    }
+                    if resp.drag_started_by(egui::PointerButton::Primary) {
+                        if row.target != RowRef::Parent {
+                            if !selected.contains(&i) {
+                                clicked = Some((i, Modifiers::NONE));
+                            }
+                            drag_start = true;
+                        }
                     }
                     if resp.secondary_clicked() && row.target != RowRef::Parent {
                         context = Some(i);
@@ -602,17 +648,27 @@ impl App {
             });
         } else {
             let (exact, seconds) = (prefs.exact_sizes, prefs.show_seconds);
+            let cols = if in_archive { &prefs.archive_cols } else { &prefs.disk_cols };
+            let row_h = (prefs.font_size + 8.5).max(22.0);
             let mut table = TableBuilder::new(ui)
                 .striped(prefs.stripes)
                 .resizable(true)
                 .sense(Sense::click_and_drag())
                 .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                .column(Column::initial(220.0).at_least(120.0).clip(true))
-                .column(Column::initial(82.0).at_least(50.0))
-                .column(Column::initial(82.0).at_least(50.0))
-                .column(Column::initial(110.0).at_least(60.0).clip(true))
-                .column(Column::initial(125.0).at_least(80.0));
-            if in_archive {
+                .column(Column::initial(220.0).at_least(120.0).clip(true));
+            if cols.size {
+                table = table.column(Column::initial(82.0).at_least(50.0));
+            }
+            if cols.packed {
+                table = table.column(Column::initial(82.0).at_least(50.0));
+            }
+            if cols.kind {
+                table = table.column(Column::initial(110.0).at_least(60.0).clip(true));
+            }
+            if cols.modified {
+                table = table.column(Column::initial(125.0).at_least(80.0));
+            }
+            if cols.crc && in_archive {
                 table = table.column(Column::initial(80.0).at_least(60.0));
             }
             table = table.column(Column::remainder());
@@ -620,72 +676,97 @@ impl App {
             table
                 .header(24.0, |mut h| {
                     h.col(|ui| self.header_cell(ui, &tl!("Name"), SortKey::Name));
-                    h.col(|ui| self.header_cell(ui, &tl!("Size"), SortKey::Size));
-                    h.col(|ui| self.header_cell(ui, &tl!("Packed"), SortKey::Packed));
-                    h.col(|ui| self.header_cell(ui, &tl!("Type"), SortKey::Kind));
-                    h.col(|ui| self.header_cell(ui, &tl!("Modified"), SortKey::Modified));
-                    if in_archive {
+                    if cols.size {
+                        h.col(|ui| self.header_cell(ui, &tl!("Size"), SortKey::Size));
+                    }
+                    if cols.packed {
+                        h.col(|ui| self.header_cell(ui, &tl!("Packed"), SortKey::Packed));
+                    }
+                    if cols.kind {
+                        h.col(|ui| self.header_cell(ui, &tl!("Type"), SortKey::Kind));
+                    }
+                    if cols.modified {
+                        h.col(|ui| self.header_cell(ui, &tl!("Modified"), SortKey::Modified));
+                    }
+                    if cols.crc && in_archive {
                         h.col(|ui| self.header_cell(ui, &tl!("Checksum"), SortKey::Crc));
                     }
                     h.col(|_| {});
                 })
                 .body(|body| {
-                    body.rows(22.0, rows.len(), |mut tr| {
+                    body.rows(row_h, rows.len(), |mut tr| {
                         let i = tr.index();
                         let row = &rows[i];
                         tr.set_selected(selected.contains(&i));
                         tr.col(|ui| {
                             icons::show(ui, Self::row_icon(row), 16.0);
                             ui.add_space(4.0);
-                            let t = if row.locked { RichText::new(&row.name).italics() } else { RichText::new(&row.name) };
-                            ui.add(egui::Label::new(t).selectable(false).truncate());
+                            let ul = underline_all || (prefs.single_click_opens && prefs.underline == UnderlineMode::Hover && ui.rect_contains_pointer(ui.max_rect()));
+                            ui.add(egui::Label::new(list_text(&row.name, row.locked, ul)).selectable(false).truncate());
                             if row.locked {
                                 icons::show(ui, Icon::Lock, 12.0);
                             }
                         });
                         let right = |ui: &mut Ui, s: String| {
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.add(egui::Label::new(s).selectable(false)));
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.add(egui::Label::new(list_text(&s, false, false)).selectable(false)));
                         };
-                        tr.col(|ui| {
-                            if let Some(s) = row.size.filter(|_| row.target != RowRef::Parent) {
-                                right(ui, human_size(s, exact));
-                            }
-                        });
-                        tr.col(|ui| {
-                            if let Some(s) = row.packed {
-                                right(ui, human_size(s, exact));
-                            }
-                        });
-                        tr.col(|ui| {
-                            ui.add(egui::Label::new(&row.kind).selectable(false).truncate());
-                        });
-                        tr.col(|ui| {
-                            ui.add(egui::Label::new(format_time(row.modified, seconds)).selectable(false));
-                        });
-                        if in_archive {
+                        if cols.size {
                             tr.col(|ui| {
-                                if let Some(c) = row.crc {
-                                    ui.add(egui::Label::new(RichText::new(format!("{c:08X}")).monospace()).selectable(false));
+                                if let Some(s) = row.size.filter(|_| row.target != RowRef::Parent) {
+                                    right(ui, human_size(s, exact));
                                 }
                             });
                         }
-                        tr.col(|_| {});
+                        if cols.packed {
+                            tr.col(|ui| {
+                                if let Some(s) = row.packed {
+                                    right(ui, human_size(s, exact));
+                                }
+                            });
+                        }
+                        if cols.kind {
+                            tr.col(|ui| {
+                                ui.add(egui::Label::new(list_text(&row.kind, false, false)).selectable(false).truncate());
+                            });
+                        }
+                        if cols.modified {
+                            tr.col(|ui| {
+                                ui.add(egui::Label::new(list_text(&format_time(row.modified, seconds), false, false)).selectable(false));
+                            });
+                        }
+                        if cols.crc && in_archive {
+                            tr.col(|ui| {
+                                if let Some(c) = row.crc {
+                                    ui.add(egui::Label::new(list_text(&format!("{c:08X}"), false, false).monospace()).selectable(false));
+                                }
+                            });
+                        }
+                        let mut rem_rect = Rect::NOTHING;
+                        tr.col(|ui| {
+                            rem_rect = ui.max_rect();
+                        });
                         let resp = tr.response();
                         rects.push((row.name.clone(), resp.rect));
+                        idx_rects.push((i, resp.rect));
                         if resp.clicked() {
                             clicked = Some((i, mods));
-                            if prefs.single_click_opens && row.is_dir {
+                            if prefs.single_click_opens {
                                 activated = Some(i);
                             }
                         }
                         if resp.double_clicked() {
                             activated = Some(i);
                         }
-                        if resp.drag_started() && row.target != RowRef::Parent {
-                            if !selected.contains(&i) {
-                                clicked = Some((i, Modifiers::NONE));
+                        if resp.drag_started_by(egui::PointerButton::Primary) {
+                            let in_rem = pointer_origin.is_some_and(|p| rem_rect.contains(p));
+                            if !in_rem && row.target != RowRef::Parent {
+                                if !selected.contains(&i) {
+                                    clicked = Some((i, Modifiers::NONE));
+                                }
+                                drag_start = true;
+                            } else {
+                                marquee_start = pointer_origin;
                             }
-                            drag_start = true;
                         }
                         if resp.secondary_clicked() && row.target != RowRef::Parent {
                             context = Some(i);
@@ -699,6 +780,39 @@ impl App {
                     });
                 });
             self.row_rects.extend(rects);
+        }
+        if background.drag_started_by(egui::PointerButton::Primary) && !drag_start {
+            marquee_start = pointer_origin;
+        }
+        if drag_start {
+            marquee_start = None;
+            self.marquee = None;
+        }
+        if let Some(origin) = marquee_start {
+            let base = if mods.command || mods.shift { self.selected.clone() } else { std::collections::BTreeSet::new() };
+            self.marquee = Some((origin, base));
+        }
+        if let Some((origin, base)) = self.marquee.clone() {
+            let (down, pos) = ui.input(|i| (i.pointer.primary_down(), i.pointer.interact_pos()));
+            if let Some(cur) = pos {
+                let rect = Rect::from_two_pos(origin, cur).intersect(list_rect);
+                let mut next = base;
+                for (i, r) in &idx_rects {
+                    if rows[*i].target != RowRef::Parent && r.intersects(rect) {
+                        next.insert(*i);
+                    }
+                }
+                self.selected = next;
+                if let Some(first) = self.selected.iter().next().copied() {
+                    self.anchor = Some(first);
+                }
+                let stroke = ui.visuals().selection.stroke;
+                let fill = ui.visuals().selection.bg_fill.gamma_multiply(0.18);
+                ui.painter().rect(rect, egui::CornerRadius::same(3), fill, stroke, egui::StrokeKind::Inside);
+            }
+            if !down {
+                self.marquee = None;
+            }
         }
         if let Some((i, m)) = clicked {
             self.click_row(i, m);
@@ -717,10 +831,17 @@ impl App {
         if let Some(c) = chosen {
             self.run_command(&c);
         }
-        if drag_start && in_archive {
-            let items = self.selected_entries();
-            if !items.is_empty() {
-                self.drag_out = Some(items);
+        if drag_start {
+            if in_archive {
+                let items = self.selected_entries();
+                if !items.is_empty() {
+                    self.drag_out = Some(items);
+                }
+            } else {
+                let paths = self.selected_disk();
+                if !paths.is_empty() {
+                    self.drag_disk = Some(paths);
+                }
             }
         }
         if let Some(i) = activated {
@@ -735,7 +856,7 @@ impl App {
         let mut cmds: Vec<&str> = Vec::new();
         ctx.input_mut(|i| {
             let (ctrl, cs) = (Modifiers::COMMAND, Modifiers::COMMAND | Modifiers::SHIFT);
-            let table: [(Modifiers, Key, &str); 19] = [
+            let table: [(Modifiers, Key, &str); 20] = [
                 (ctrl, Key::C, "archive.copy_names"),
                 (Modifiers::NONE, Key::F2, "act.rename"),
                 (cs, Key::E, "act.extract_here"),
@@ -749,6 +870,7 @@ impl App {
                 (ctrl, Key::F, "act.find"),
                 (ctrl, Key::D, "bookmark.add"),
                 (ctrl, Key::P, "archive.password"),
+                (ctrl, Key::L, "diags.show"),
                 (ctrl, Key::Comma, "prefs.open"),
                 (Modifiers::NONE, Key::F3, "act.view"),
                 (Modifiers::NONE, Key::F5, "view.refresh"),
@@ -796,6 +918,13 @@ impl App {
         }
         if back {
             self.go_up();
+        }
+        let (mouse_back, mouse_fwd) = ctx.input(|i| (i.pointer.button_pressed(egui::PointerButton::Extra1), i.pointer.button_pressed(egui::PointerButton::Extra2)));
+        if mouse_back {
+            self.go_back();
+        }
+        if mouse_fwd {
+            self.go_forward();
         }
     }
 
@@ -855,6 +984,7 @@ impl App {
             places.push((b.name.clone(), b.path.clone()));
         }
         let mut targets = Vec::new();
+        let mut choose_rect: Option<Rect> = None;
         egui::Panel::bottom("ac-dragbar").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.label(RichText::new(tf!("Drop {n} item(s) on a place to unpack them there:", n = items.len())).strong());
@@ -865,18 +995,90 @@ impl App {
                     }
                     targets.push((r.rect, path.clone()));
                 }
+                let r = ui.add(egui::Button::new(tl!("Choose folder…")).min_size(Vec2::new(0.0, 30.0)));
+                if pos.is_some_and(|p| r.rect.contains(p)) {
+                    ui.painter().rect_stroke(r.rect, egui::CornerRadius::same(4), egui::Stroke::new(2.0, icons::TEAL), egui::StrokeKind::Outside);
+                }
+                choose_rect = Some(r.rect);
             });
         });
         self.drop_targets = targets;
         if released {
+            let over_choose = pos.is_some_and(|p| choose_rect.is_some_and(|r| r.contains(p)));
             let target = pos.and_then(|p| self.drop_targets.iter().find(|(r, _)| r.contains(p)).map(|(_, d)| d.clone()));
             self.drag_out = None;
-            if let (Some(dest), Some(v)) = (target, self.open_archive_view()) {
+            if over_choose {
+                if let Some(v) = self.open_archive_view() {
+                    let (archive, folder) = (v.path.clone(), v.folder.clone());
+                    self.ui_state.extract = Some(dialogs::extract::ExtractDialog::new(self, vec![archive], items, folder));
+                }
+            } else if let (Some(dest), Some(v)) = (target, self.open_archive_view()) {
                 let (archive, folder) = (v.path.clone(), v.folder.clone());
                 let mut o = self.default_extract_options(dest);
                 o.only = items;
                 o.base = folder;
                 self.start_extract(vec![archive], o, false, dialogs::extract::DeleteAfter::Never);
+            }
+        }
+    }
+
+    fn drag_disk_bar(&mut self, ui: &mut Ui, frame: &eframe::Frame) {
+        let Some(paths) = self.drag_disk.clone() else { return };
+        let released = ui.input(|i| i.pointer.any_released());
+        let pos = ui.ctx().pointer_latest_pos();
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        if ui.input(|i| i.pointer.hover_pos().is_none() && i.pointer.primary_down()) {
+            self.drag_disk = None;
+            crate::dragout::start_paths(self, frame, paths);
+            return;
+        }
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        let _ = frame;
+        if let Some(p) = pos {
+            egui::Area::new(egui::Id::unique("ac-drag-pill")).fixed_pos(p + Vec2::new(14.0, 14.0)).order(egui::Order::Tooltip).interactable(false).show(ui.ctx(), |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.label(tf!("{n} item(s)", n = paths.len()));
+                });
+            });
+        }
+        let all_archives = paths.iter().all(|p| self.rows.iter().any(|r| matches!(&r.target, RowRef::Disk(rp) if rp == p) && r.is_archive));
+        let mut pack_rect: Option<Rect> = None;
+        let mut extract_rect: Option<Rect> = None;
+        let mut extract_here_rect: Option<Rect> = None;
+        egui::Panel::bottom("ac-dragdiskbar").show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new(tf!("Drop {n} item(s) on an action:", n = paths.len())).strong());
+                let r = ui.add(egui::Button::new(tl!("Pack into an archive…")).min_size(Vec2::new(0.0, 30.0)));
+                if pos.is_some_and(|p| r.rect.contains(p)) {
+                    ui.painter().rect_stroke(r.rect, egui::CornerRadius::same(4), egui::Stroke::new(2.0, icons::TEAL), egui::StrokeKind::Outside);
+                }
+                pack_rect = Some(r.rect);
+                if all_archives {
+                    let r = ui.add(egui::Button::new(tl!("Extract files…")).min_size(Vec2::new(0.0, 30.0)));
+                    if pos.is_some_and(|p| r.rect.contains(p)) {
+                        ui.painter().rect_stroke(r.rect, egui::CornerRadius::same(4), egui::Stroke::new(2.0, icons::TEAL), egui::StrokeKind::Outside);
+                    }
+                    extract_rect = Some(r.rect);
+                    let r = ui.add(egui::Button::new(tl!("Extract Here")).min_size(Vec2::new(0.0, 30.0)));
+                    if pos.is_some_and(|p| r.rect.contains(p)) {
+                        ui.painter().rect_stroke(r.rect, egui::CornerRadius::same(4), egui::Stroke::new(2.0, icons::TEAL), egui::StrokeKind::Outside);
+                    }
+                    extract_here_rect = Some(r.rect);
+                }
+            });
+        });
+        if released {
+            self.drag_disk = None;
+            let over = |r: Option<Rect>| pos.is_some_and(|p| r.is_some_and(|rect| rect.contains(p)));
+            if over(pack_rect) {
+                self.open_add_dialog(paths);
+            } else if over(extract_rect) {
+                self.ui_state.extract = Some(dialogs::extract::ExtractDialog::new(self, paths, Vec::new(), String::new()));
+            } else if over(extract_here_rect)
+                && let Some(dest) = paths[0].parent().map(std::path::Path::to_path_buf)
+            {
+                let o = self.default_extract_options(dest);
+                self.start_extract(paths, o, false, dialogs::extract::DeleteAfter::Never);
             }
         }
     }
@@ -917,6 +1119,29 @@ impl App {
 impl eframe::App for App {
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
         raw.events.append(&mut self.inject);
+        ctx.set_theme(match self.prefs.get().interface.theme {
+            ThemeMode::System => egui::ThemePreference::System,
+            ThemeMode::Light => egui::ThemePreference::Light,
+            ThemeMode::Dark => egui::ThemePreference::Dark,
+        });
+        for (theme, border, hover_border) in [
+            (egui::Theme::Dark, Color32::from_gray(68), Color32::from_gray(110)),
+            (egui::Theme::Light, Color32::from_gray(190), Color32::from_gray(135)),
+        ] {
+            ctx.style_mut_of(theme, |s| {
+                let r = egui::CornerRadius::same(4);
+                s.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, border);
+                s.visuals.widgets.inactive.corner_radius = r;
+                s.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, hover_border);
+                s.visuals.widgets.hovered.corner_radius = r;
+                s.visuals.widgets.active.corner_radius = r;
+                s.visuals.widgets.noninteractive.corner_radius = r;
+            });
+        }
+        if self.launch.action.is_none() && self.launch.screenshot.is_none() && self.launch.self_test.is_none() {
+            let level = if self.prefs.get().interface.always_on_top { egui::WindowLevel::AlwaysOnTop } else { egui::WindowLevel::Normal };
+            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(level));
+        }
         let env = self.root_env();
         let fired = &mut self.fired;
         craft_ui::shell::embed::before_input(ctx, |out| {
@@ -948,11 +1173,26 @@ impl eframe::App for App {
         }
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(self.title()));
         self.hud.toolbar_buttons = 0;
+        if self.launch.action.is_some() {
+            egui::CentralPanel::default().show(ui, |_| {});
+            dialogs::show_all(self, &ctx);
+            self.files.show_pending(Some(&*frame));
+            for (pick, answer) in self.files.take_answers() {
+                self.deliver(pick, answer);
+            }
+            if self.job.is_some() {
+                ctx.request_repaint_after(std::time::Duration::from_millis(30));
+            } else if self.frame_no > 2 && !self.ui_state.any_open() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+            return;
+        }
         self.draw_menu(ui);
         self.draw_toolbar(ui);
         self.draw_path_bar(ui);
         self.draw_status(ui);
         self.drag_out_bar(ui, frame);
+        self.drag_disk_bar(ui, frame);
         egui::CentralPanel::default().show(ui, |ui| self.draw_list(ui));
         self.keys(&ctx);
         self.drops(&ctx);

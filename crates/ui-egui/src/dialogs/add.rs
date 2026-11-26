@@ -128,16 +128,15 @@ impl AddDialog {
 
     fn general(&mut self, ui: &mut egui::Ui, app: &mut App) {
         ui.label(tl!("Archive file"));
-        ui.horizontal(|ui| {
-            let r = ui.add(egui::TextEdit::singleline(&mut self.archive).desired_width(ui.available_width() - 90.0));
-            if r.lost_focus() {
-                self.sync_format_from_name();
-            }
+        let r = super::text_row(ui, &mut self.archive, None, |ui, archive| {
             if ui.button(tl!("Browse…")).clicked() {
-                let p = PathBuf::from(&self.archive);
+                let p = PathBuf::from(archive);
                 app.pick(Pick::AddArchiveName, craft_dialogs::Kind::Save, tl!("Where should the archive go?"), p.parent().map(PathBuf::from), p.file_name().map(|n| n.to_string_lossy().to_string()), false);
             }
         });
+        if r.lost_focus() {
+            self.sync_format_from_name();
+        }
         ui.add_space(6.0);
         ui.columns(2, |c| {
             group(&mut c[0], &tl!("Archive type"), |ui| {

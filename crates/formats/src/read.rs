@@ -2,7 +2,7 @@
 //! `list` returns the items, `visit` streams the chosen items' contents.
 
 use crate::volumes;
-use crate::{rarfmt, sevenzfmt, tarfmt, zipfmt};
+use crate::{isofmt, rarfmt, sevenzfmt, tarfmt, zipfmt};
 use archivecraft_model::{normalize_name, Entry, Error, Format, Listing, Result};
 use std::io::Read;
 use std::path::Path;
@@ -26,6 +26,7 @@ pub fn list(path: &Path, password: Option<&str>) -> Result<Listing> {
         Format::Zip => zipfmt::list(path)?,
         Format::SevenZ => sevenzfmt::list(path, password)?,
         Format::Rar => rarfmt::list(path, password)?,
+        Format::Iso => isofmt::list(path)?,
         _ => tarfmt::list(path, format)?,
     };
     listing.volumes = volumes::volume_parts(path).len();
@@ -38,6 +39,7 @@ pub fn visit(path: &Path, password: Option<&str>, want: Want, f: VisitFn) -> Res
         Format::Zip => zipfmt::visit(path, password, want, f),
         Format::SevenZ => sevenzfmt::visit(path, password, want, f),
         Format::Rar => rarfmt::visit(path, password, want, f),
+        Format::Iso => isofmt::visit(path, want, f),
         fmt => tarfmt::visit(path, fmt, want, f),
     }
 }

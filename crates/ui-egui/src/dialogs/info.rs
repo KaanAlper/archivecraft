@@ -42,8 +42,9 @@ impl InfoDialog {
             ui.vertical(|ui| {
                 ui.heading(tl!(l.format.describe()));
                 ui.add_space(4.0);
-                let yes = tl!("yes");
-                let no = tl!("no");
+                let present = tl!("Present");
+                let absent = tl!("Absent");
+                let flag = |on: bool| if on { present.clone() } else { absent.clone() };
                 let rows: Vec<(String, String)> = vec![
                     (tl!("Methods"), l.methods.join(", ")),
                     (String::new(), String::new()),
@@ -54,12 +55,12 @@ impl InfoDialog {
                     (tl!("On disk"), format!("{} bytes", group_digits(l.archive_size))),
                     (tl!("Ratio"), format!("{}%", l.ratio_percent())),
                     (String::new(), String::new()),
-                    (tl!("Parts"), l.volumes.to_string()),
-                    (tl!("Locked items"), if l.any_encrypted() { yes.clone() } else { no.clone() }),
-                    (tl!("Locked names"), if l.names_encrypted { yes.clone() } else { no.clone() }),
-                    (tl!("Solid"), if l.solid { yes.clone() } else { no.clone() }),
-                    (tl!("Note"), if l.comment.as_deref().is_some_and(|c| !c.is_empty()) { yes.clone() } else { no.clone() }),
-                    (tl!("Recovery data"), if self.recovery { yes } else { no }),
+                    (tl!("Main comment"), flag(l.comment.as_deref().is_some_and(|c| !c.is_empty()))),
+                    (tl!("Encryption"), flag(l.any_encrypted() || l.names_encrypted)),
+                    (tl!("Volumes"), l.volumes.to_string()),
+                    (String::new(), String::new()),
+                    (tl!("Solid"), flag(l.solid)),
+                    (tl!("Recovery record"), flag(self.recovery)),
                 ];
                 egui::Grid::new("ac-info-grid").num_columns(2).spacing([40.0, 3.0]).show(ui, |ui| {
                     for (k, v) in rows {
@@ -74,7 +75,7 @@ impl InfoDialog {
                     }
                 });
                 ui.add_space(6.0);
-                ui.label(egui::RichText::new(self.path.display().to_string()).weak());
+                ui.add(egui::Label::new(egui::RichText::new(self.path.display().to_string()).weak()).truncate());
             });
         });
     }
@@ -82,7 +83,7 @@ impl InfoDialog {
     pub fn show(&mut self, app: &mut App, ctx: &egui::Context) -> Flow {
         let mut flow = Flow::Keep;
         let mut open = true;
-        window(tl!("Archive details"), "ac-info").open(&mut open).default_width(440.0).show(ctx, |ui| {
+        window(tl!("Archive details"), "ac-info").open(&mut open).resizable(false).default_width(480.0).show(ctx, |ui| {
             tabs(ui, &mut self.tab, &[tl!("Summary"), tl!("Note")]);
             match &self.listing {
                 Err(e) => {
@@ -94,8 +95,9 @@ impl InfoDialog {
                         self.summary(ui, &l);
                     } else {
                         let editable = l.format.supports_comment();
+                        let wrap = app.prefs.get().interface.wrap_comment;
                         ui.label(tl!("The archive's note"));
-                        ui.add_enabled(editable, egui::TextEdit::multiline(&mut self.comment).desired_rows(12).desired_width(f32::INFINITY));
+                        ui.add_enabled(editable, egui::TextEdit::multiline(&mut self.comment).desired_rows(12).desired_width(if wrap { f32::INFINITY } else { 2000.0 }));
                         if !editable {
                             ui.label(egui::RichText::new(tl!("Only ZIP archives can hold a note.")).weak());
                         }
@@ -113,7 +115,7 @@ impl InfoDialog {
             }
             ui.separator();
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button(tl!("Close")).clicked() {
+                if ui.add(egui::Button::new(tl!("Close")).min_size(egui::vec2(88.0, 26.0))).clicked() {
                     flow = Flow::Close;
                 }
             });

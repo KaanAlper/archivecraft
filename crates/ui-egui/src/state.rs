@@ -28,8 +28,20 @@ pub struct Launch {
 pub enum LaunchAction {
     AddDialog(Vec<PathBuf>),
     AddZip(Vec<PathBuf>),
+    ExtractDialog(Vec<PathBuf>),
     ExtractHere(Vec<PathBuf>),
     ExtractFolder(Vec<PathBuf>),
+    Test(Vec<PathBuf>),
+    Convert(Vec<PathBuf>),
+}
+
+pub struct TempView {
+    pub temp_dir: PathBuf,
+    pub temp_file: PathBuf,
+    pub name: String,
+    pub mtime: Option<std::time::SystemTime>,
+    pub encrypted: bool,
+    pub ignore_mod: bool,
 }
 
 pub struct ArchiveView {
@@ -42,6 +54,12 @@ pub struct ArchiveView {
 pub enum Place {
     Disk(PathBuf),
     Archive(ArchiveView),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NavTarget {
+    Disk(PathBuf),
+    Archive(PathBuf, String),
 }
 
 pub type Res<T> = archivecraft_engine::Result<T>;
@@ -76,6 +94,9 @@ pub enum Pick {
     ConvertOut,
     CommentFile,
     InfoCommentFile,
+    ReportSave,
+    PrefsExport,
+    PrefsImport,
     PrefsFolder(u8),
     ExternalViewer,
 }
@@ -110,7 +131,12 @@ pub struct App {
     pub fired: Vec<String>,
     pub hud: Hud,
     pub row_rects: HashMap<String, Rect>,
+    pub nav_back: Vec<NavTarget>,
+    pub nav_forward: Vec<NavTarget>,
+    nav_replaying: bool,
+    pub marquee: Option<(egui::Pos2, BTreeSet<usize>)>,
     pub drag_out: Option<Vec<String>>,
+    pub drag_disk: Option<Vec<PathBuf>>,
     pub drop_targets: Vec<(Rect, PathBuf)>,
     pub launch: Launch,
     pub frame_no: u64,
@@ -119,6 +145,7 @@ pub struct App {
     pub shot_requested: bool,
     pub shot_done: Arc<std::sync::atomic::AtomicBool>,
     pub last_extract: Option<PathBuf>,
+    pub temp_views: Vec<TempView>,
     pub ctx: egui::Context,
 }
 
@@ -160,7 +187,12 @@ impl App {
             fired: Vec::new(),
             hud: Hud::default(),
             row_rects: HashMap::new(),
+            nav_back: Vec::new(),
+            nav_forward: Vec::new(),
+            nav_replaying: false,
+            marquee: None,
             drag_out: None,
+            drag_disk: None,
             drop_targets: Vec::new(),
             launch: launch.clone(),
             frame_no: 0,
@@ -169,6 +201,7 @@ impl App {
             shot_requested: false,
             shot_done: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             last_extract: None,
+            temp_views: Vec::new(),
             ctx: ctx.clone(),
         };
         app.refresh();
@@ -199,6 +232,11 @@ impl App {
                 let opts = CreateOptions { format: archivecraft_engine::Format::Zip, ..self.default_create_options() };
                 self.start_create(files, archive, opts, false);
             }
+            LaunchAction::ExtractDialog(archives) => {
+                if !archives.is_empty() {
+                    self.ui_state.extract = Some(dialogs::extract::ExtractDialog::new(self, archives, Vec::new(), String::new()));
+                }
+            }
             LaunchAction::ExtractHere(archives) => {
                 let dest = archives.first().and_then(|a| a.parent()).map(Path::to_path_buf).unwrap_or_default();
                 let o = self.default_extract_options(dest);
@@ -208,6 +246,17 @@ impl App {
                 let dest = archives.first().and_then(|a| a.parent()).map(Path::to_path_buf).unwrap_or_default();
                 let o = self.default_extract_options(dest);
                 self.start_extract(archives, o, true, dialogs::extract::DeleteAfter::Never);
+            }
+            LaunchAction::Test(archives) => {
+                if !archives.is_empty() {
+                    self.start_test(archives);
+                }
+            }
+            LaunchAction::Convert(archives) => {
+                if !archives.is_empty() {
+                    let out = archives[0].parent().map(Path::to_path_buf).unwrap_or_else(|| self.disk_dir());
+                    self.ui_state.convert = Some(dialogs::tools::ConvertDialog::new(archives, out));
+                }
             }
         }
     }
@@ -242,13 +291,68 @@ impl App {
         };
     }
 
+    fn current_nav(&self) -> NavTarget {
+        match &self.place {
+            Place::Disk(d) => NavTarget::Disk(d.clone()),
+            Place::Archive(v) => NavTarget::Archive(v.path.clone(), v.folder.clone()),
+        }
+    }
+
+    fn record_nav(&mut self, next: &NavTarget) {
+        if self.nav_replaying {
+            return;
+        }
+        let cur = self.current_nav();
+        if &cur != next {
+            self.nav_back.push(cur);
+            if self.nav_back.len() > 64 {
+                self.nav_back.remove(0);
+            }
+            self.nav_forward.clear();
+        }
+    }
+
+    fn navigate_to(&mut self, target: NavTarget) {
+        self.nav_replaying = true;
+        match target {
+            NavTarget::Disk(d) => self.go_disk(d),
+            NavTarget::Archive(p, f) => {
+                let same = self.open_archive_view().is_some_and(|v| v.path == p);
+                if !same {
+                    self.open_archive(p);
+                }
+                if self.open_archive_view().is_some() {
+                    self.enter_folder(f);
+                }
+            }
+        }
+        self.nav_replaying = false;
+    }
+
+    pub fn go_back(&mut self) {
+        let Some(prev) = self.nav_back.pop() else { return };
+        self.nav_forward.push(self.current_nav());
+        self.navigate_to(prev);
+    }
+
+    pub fn go_forward(&mut self) {
+        let Some(next) = self.nav_forward.pop() else { return };
+        self.nav_back.push(self.current_nav());
+        self.navigate_to(next);
+    }
+
     pub fn go_disk(&mut self, dir: PathBuf) {
+        self.record_nav(&NavTarget::Disk(dir.clone()));
         self.place = Place::Disk(dir.clone());
         self.prefs.update(|p| p.paths.last_folder = Some(dir));
         self.refresh();
     }
 
     pub fn enter_folder(&mut self, folder: String) {
+        if let Place::Archive(v) = &self.place {
+            let next = NavTarget::Archive(v.path.clone(), folder.clone());
+            self.record_nav(&next);
+        }
         if let Place::Archive(v) = &mut self.place {
             v.folder = folder;
         }
@@ -270,6 +374,7 @@ impl App {
             Ok(listing) => {
                 let show_comment = self.prefs.get().interface.show_comment_on_open && listing.comment.as_deref().is_some_and(|c| !c.trim().is_empty());
                 self.prefs.update(|p| p.remember(path.clone()));
+                self.record_nav(&NavTarget::Archive(path.clone(), String::new()));
                 self.place = Place::Archive(ArchiveView { path: path.clone(), listing, folder: String::new(), password });
                 self.refresh();
                 if show_comment {
@@ -405,7 +510,8 @@ impl App {
     }
 
     fn spawn(&mut self, kind: JobKind, title: String, work: impl FnOnce(&Ctl) -> Outcome + Send + 'static) {
-        self.job = Some(Job::spawn(kind, title, self.ctx.clone(), work));
+        let low_priority = self.prefs.get().system.low_priority;
+        self.job = Some(Job::spawn(kind, title, self.ctx.clone(), low_priority, work));
     }
 
     pub fn start_create(&mut self, sources: Vec<PathBuf>, archive: PathBuf, opts: CreateOptions, per_file: bool) {
@@ -551,6 +657,7 @@ impl App {
     }
 
     pub fn poll_job(&mut self) {
+        self.poll_temp_views();
         let Some(job) = &mut self.job else { return };
         job.poll_question();
         if job.is_done() && job.asking.is_none() {
@@ -568,9 +675,63 @@ impl App {
     }
 
     fn show_diags(&mut self, ctl: &Ctl) {
+        let lines: Vec<String> = ctl
+            .diags
+            .lock()
+            .map(|d| d.iter().map(|x| format!("{:?}: {} — {}", x.severity, x.archive, x.message)).collect())
+            .unwrap_or_default();
+        self.append_error_log(&lines);
         let w = dialogs::progress::DiagWindow::from_ctl(ctl, tl!("Problems found"));
         self.ui_state.last_diags = Some(w.clone());
         self.ui_state.diags = Some(w);
+    }
+
+    fn append_error_log(&self, lines: &[String]) {
+        let sys = &self.prefs.get().system;
+        if !sys.log_problems_to_file || lines.is_empty() {
+            return;
+        }
+        let dir = dirs::data_dir().map(|d| d.join("archivecraft")).unwrap_or_else(std::env::temp_dir);
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("errors.log");
+        let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+        let mut content = std::fs::read_to_string(&path).unwrap_or_default();
+        for l in lines {
+            content.push_str(&format!("[{ts}] {l}\n"));
+        }
+        if sys.limit_log_size {
+            let max_bytes = (sys.log_limit_kb as usize).saturating_mul(1024);
+            if content.len() > max_bytes {
+                let mut start = content.len() - max_bytes;
+                while start < content.len() && !content.is_char_boundary(start) {
+                    start += 1;
+                }
+                if let Some(nl) = content[start..].find('\n') {
+                    start += nl + 1;
+                }
+                content.drain(..start);
+            }
+        }
+        let _ = std::fs::write(&path, content);
+    }
+
+    fn poll_temp_views(&mut self) {
+        let mut modified_names = Vec::new();
+        for tv in &mut self.temp_views {
+            if tv.ignore_mod {
+                continue;
+            }
+            if let Ok(meta) = std::fs::metadata(&tv.temp_file)
+                && let Ok(m) = meta.modified()
+                && tv.mtime.is_some_and(|prev| m > prev)
+            {
+                tv.mtime = Some(m);
+                modified_names.push(tv.name.clone());
+            }
+        }
+        if let Some(name) = modified_names.into_iter().last() {
+            self.note(tf!("Temporary copy of {name} was modified externally.", name = name));
+        }
     }
 
     fn finish_job(&mut self, outcome: Outcome, ctl: &Ctl, kind: JobKind) {
@@ -847,8 +1008,18 @@ impl App {
         }
     }
 
+    pub fn act_report(&mut self) {
+        let Some(p) = self.target_archive() else {
+            self.note(tl!("Choose an archive first."));
+            return;
+        };
+        let suggested = format!("{}-report.txt", p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "archive".into()));
+        self.pick(Pick::ReportSave, craft_dialogs::Kind::Save, tl!("Save archive report"), p.parent().map(Path::to_path_buf), Some(suggested), false);
+    }
+
     pub fn act_find(&mut self) {
-        self.ui_state.find = Some(dialogs::find::FindDialog::new(self.disk_dir()));
+        let saved = self.prefs.get().saved.find.clone();
+        self.ui_state.find = Some(dialogs::find::FindDialog::from_saved(self.disk_dir(), &saved));
     }
 
     pub fn act_repair(&mut self) {
@@ -869,16 +1040,16 @@ impl App {
             Ok(buf)
         });
         match read {
-            Ok(data) => self.show_viewer(file_name(&p), data, Some(p)),
+            Ok(data) => self.show_viewer(file_name(&p), data, Some(p), None),
             Err(e) => self.note(tf!("Cannot read the file: {e}", e = e)),
         }
     }
 
     pub fn view_entry(&mut self, path: String) {
-        let Some(archive) = self.open_archive_view().map(|v| v.path.clone()) else { return };
+        let Some((archive, encrypted)) = self.open_archive_view().map(|v| (v.path.clone(), v.password.is_some() || v.listing.entries.iter().any(|e| e.path == path && e.encrypted))) else { return };
         let pw = self.password_for(&archive);
         match ops::read_entry(&archive, &path, pw.as_deref()) {
-            Ok(data) => self.show_viewer(path.rsplit('/').next().unwrap_or(&path).to_string(), data, None),
+            Ok(data) => self.show_viewer(path.rsplit('/').next().unwrap_or(&path).to_string(), data, None, Some((archive, path, pw, encrypted))),
             Err(e) if e.is_password() => {
                 self.ui_state.unlock = Some(dialogs::progress::PasswordPrompt::new(archive.display().to_string(), path.clone(), pw.is_some(), None).then_view(path));
             }
@@ -886,17 +1057,39 @@ impl App {
         }
     }
 
-    fn show_viewer(&mut self, name: String, data: Vec<u8>, disk: Option<PathBuf>) {
+    fn show_viewer(&mut self, name: String, data: Vec<u8>, disk: Option<PathBuf>, archive_ctx: Option<(PathBuf, String, Option<String>, bool)>) {
         use crate::settings::ViewerKind;
+        use archivecraft_engine::model::util::{matches_any, parse_patterns};
         let viewer = self.prefs.get().viewer.clone();
         if matches!(viewer.kind, ViewerKind::SystemApp | ViewerKind::External) {
             let file = match disk {
                 Some(p) => p,
                 None => {
-                    let dir = std::env::temp_dir().join("archivecraft-view");
+                    let base_tmp = self.prefs.get().paths.temp_folder.clone().filter(|d| d.is_dir()).unwrap_or_else(std::env::temp_dir);
+                    let dir = base_tmp.join(format!("archivecraft-view-{}-{}", std::process::id(), self.frame_no));
                     let _ = std::fs::create_dir_all(&dir);
-                    let p = dir.join(&name);
-                    let _ = std::fs::write(&p, &data);
+                    let unpack_all = matches_any(&parse_patterns(&viewer.unpack_all_for), &name);
+                    let ignore_mod = matches_any(&parse_patterns(&viewer.ignore_modifications_for), &name);
+                    let mut p = dir.join(&name);
+                    let mut encrypted = false;
+                    if let Some((archive, entry_path, pw, enc)) = archive_ctx {
+                        encrypted = enc;
+                        if unpack_all {
+                            let mut o = ExtractOptions::to(&dir);
+                            o.overwrite = archivecraft_engine::model::Overwrite::Always;
+                            if ops::extract(&archive, &o, pw.as_deref(), &Ctl::default()).is_ok() {
+                                let candidate = dir.join(&entry_path);
+                                if candidate.exists() {
+                                    p = candidate;
+                                }
+                            }
+                        }
+                    }
+                    if !p.exists() {
+                        let _ = std::fs::write(&p, &data);
+                    }
+                    let mtime = std::fs::metadata(&p).and_then(|m| m.modified()).ok();
+                    self.temp_views.push(TempView { temp_dir: dir, temp_file: p.clone(), name: name.clone(), mtime, encrypted, ignore_mod });
                     p
                 }
             };
@@ -906,7 +1099,11 @@ impl App {
             }
             return;
         }
-        self.ui_state.viewer = Some(dialogs::viewer::Viewer::new(&self.ctx, name, data, viewer, viewer_kind_ask(&self.prefs.get().viewer)));
+        let v = dialogs::viewer::Viewer::new(&self.ctx, name, data, viewer.clone(), viewer_kind_ask(&viewer));
+        if viewer.reuse_window {
+            self.ui_state.viewers.clear();
+        }
+        self.ui_state.viewers.push(v);
     }
 
     pub fn go_bookmark(&mut self, b: &crate::settings::Bookmark) {
@@ -1000,6 +1197,53 @@ impl App {
                     d.comment = std::fs::read_to_string(&first).unwrap_or_default();
                 }
             }
+            Pick::ReportSave => {
+                if let Some(archive) = self.target_archive() {
+                    let listing = match self.open_archive_view().filter(|v| v.path == archive) {
+                        Some(v) => Ok(v.listing.clone()),
+                        None => formats::list(&archive, self.session_password.as_deref()).map_err(|e| e.to_string()),
+                    };
+                    match listing {
+                        Ok(l) => {
+                            let mut out = format!(
+                                "Archive: {}\nFormat: {}\nFiles: {}, Folders: {}\nUnpacked: {} bytes, Packed: {} bytes ({}%)\n\n",
+                                archive.display(),
+                                l.format.label(),
+                                l.file_count(),
+                                l.folder_count(),
+                                l.total_size(),
+                                l.packed_size(),
+                                l.ratio_percent()
+                            );
+                            for e in &l.entries {
+                                let kind = if e.is_dir { "DIR " } else { "FILE" };
+                                let packed = e.packed.map_or_else(|| "-".into(), |p| p.to_string());
+                                out.push_str(&format!("{kind}  {:>12}  {:>12}  {}\n", e.size, packed, e.path));
+                            }
+                            match std::fs::write(&first, out) {
+                                Ok(()) => self.note(tf!("Report saved to {p}", p = first.display())),
+                                Err(e) => self.note(e.to_string()),
+                            }
+                        }
+                        Err(e) => self.note(e),
+                    }
+                }
+            }
+            Pick::PrefsExport => {
+                let json = serde_json::to_string_pretty(&self.prefs.get().clone()).unwrap_or_default();
+                match std::fs::write(&first, json) {
+                    Ok(()) => self.note(tf!("Settings exported to {p}", p = first.display())),
+                    Err(e) => self.note(e.to_string()),
+                }
+            }
+            Pick::PrefsImport => match std::fs::read_to_string(&first).and_then(|s| serde_json::from_str::<Prefs>(&s).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))) {
+                Ok(imported) => {
+                    self.prefs.update(|p| *p = imported);
+                    self.refresh();
+                    self.note(tl!("Settings imported."));
+                }
+                Err(e) => self.note(e.to_string()),
+            },
             Pick::PrefsFolder(slot) => {
                 if let Some(p) = &mut u.prefs {
                     p.set_folder(slot, first);
@@ -1016,4 +1260,57 @@ impl App {
 
 fn viewer_kind_ask(v: &crate::settings::Viewer) -> bool {
     v.kind == crate::settings::ViewerKind::Ask
+}
+
+fn wipe_file(path: &Path) {
+    use std::io::{Seek, SeekFrom, Write};
+    if let Ok(mut f) = std::fs::OpenOptions::new().write(true).open(path)
+        && let Ok(len) = f.metadata().map(|m| m.len())
+    {
+        let _ = f.seek(SeekFrom::Start(0));
+        let zeros = [0u8; 8192];
+        let mut left = len;
+        while left > 0 {
+            let n = (left as usize).min(zeros.len());
+            if f.write_all(&zeros[..n]).is_err() {
+                break;
+            }
+            left -= n as u64;
+        }
+        let _ = f.flush();
+    }
+    let _ = std::fs::remove_file(path);
+}
+
+fn wipe_tree(path: &Path, secure: bool) {
+    if !path.exists() {
+        return;
+    }
+    if path.is_dir() {
+        if secure && let Ok(entries) = std::fs::read_dir(path) {
+            for e in entries.flatten() {
+                wipe_tree(&e.path(), true);
+            }
+        }
+        let _ = std::fs::remove_dir_all(path);
+    } else if secure {
+        wipe_file(path);
+    } else {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+impl Drop for App {
+    fn drop(&mut self) {
+        use crate::settings::WipeTemp;
+        let mode = self.prefs.get().security.wipe_temp;
+        for tv in self.temp_views.drain(..) {
+            let secure = match mode {
+                WipeTemp::Never => false,
+                WipeTemp::Always => true,
+                WipeTemp::EncryptedOnly => tv.encrypted,
+            };
+            wipe_tree(&tv.temp_dir, secure);
+        }
+    }
 }

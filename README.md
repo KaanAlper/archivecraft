@@ -3,25 +3,31 @@
 An open-source archive manager written in Rust, part of the Craft app suite (egui with the
 craft-libs UI, menu, dialog, settings and translation crates). Licensed **MIT OR Apache-2.0**.
 
-- Create and unpack **ZIP, 7z, tar, tar.gz, tar.xz, tar.zst**; split into parts (`name.zip.001`…).
+- Create and unpack **ZIP, JAR, 7z, tar, tar.gz, tar.xz, tar.zst**; split into parts (`name.zip.001`…).
+- **ISO** image inspection and unpacking, plus **RAR** unpacking (enabled by default via the `rar`
+  cargo feature, backed by the Apache-2.0 `rars` crate's reading API; ArchiveCraft never writes RAR).
 - **AES-256** passwords for ZIP and 7z (7z can also hide file names); optional weak legacy ZIP
   locking for very old tools.
-- **RAR: unpack only**, behind the optional `rar` cargo feature (off by default), through the
-  Apache-2.0 `rars` crate's reading API. ArchiveCraft never writes RAR.
-- Check (test) archives, look inside files without unpacking, remove items, edit the ZIP note,
-  convert between formats, search names and contents (also inside archives), speed test.
+- Check (test) archives, look inside files without unpacking (single or multi-window viewer,
+  auto-encoding, optional full-archive unpack for HTML/linked files), remove items, edit the ZIP
+  note, convert between formats, search names and contents (also inside archives), speed test.
 - **Recovery data** in the open PAR2 format, and Repair that uses it (or saves every readable
   item when there is none).
 - Safe unpacking: absolute paths and `..` that would leave the destination are refused, links
-  are never created or followed.
-- File-manager right-click actions on Linux (Nautilus, Dolphin, Nemo, Thunar, desktop entry),
-  installed and removed from Preferences ▸ File manager.
+  are never created or followed, prohibited file types can be excluded, and temporary files can
+  be securely zero-wiped on exit (`Never`, `Always`, or `Encrypted only`).
+- Drag-and-drop from both archives and disk folders, plus box (marquee) selection in empty list space.
+- File-manager right-click actions on Linux (Nautilus, Dolphin, Nemo, Thunar, app menu and desktop
+  shortcut), with customizable context-menu items, cascaded submenus and menu icons under
+  **Preferences ▸ Integration**.
+- Optional error logging to file with configurable size limits, and low-priority background jobs
+  under **Preferences ▸ System**.
 
 ## Build
 
 ```sh
-cargo run                      # the window
-cargo run --features rar       # with RAR unpacking
+cargo run                      # the window (RAR unpacking enabled by default)
+cargo run --no-default-features # without RAR support
 cargo run -p archivecraft-cli -- --help
 cargo test --workspace
 ```
@@ -55,13 +61,14 @@ Right-clicking files or folders shows an **ArchiveCraft** submenu:
 
 - Pack into an archive… (opens the Add window)
 - Pack into a ZIP right away (`<name>.zip`, default settings)
-- Unpack here / Unpack into its own folder (archives only)
+- Open with ArchiveCraft / Extract files… / Extract Here / Unpack into its own folder (archives only)
+- Optional Test archive and Convert archive… actions (configurable under **Preferences ▸ Integration ▸ Context menu items…**)
 
 Supported: **Dolphin** (KDE service menu), **Files/Nautilus** (a real submenu through
 nautilus-python; plain Scripts otherwise), **Nemo** actions, **Thunar** custom actions, and the
-app's desktop entry. ArchiveCraft asks once on its first start; it can also be added or taken
-out under **Settings ▸ Add ArchiveCraft to my file manager's right-click menu**, under
-**Preferences ▸ File manager**, or from a terminal:
+app's desktop entry / desktop shortcut. ArchiveCraft asks once on its first start; it can also be
+added, customized or removed under **Settings ▸ Add ArchiveCraft to my file manager's right-click
+menu**, under **Preferences ▸ Integration**, or from a terminal:
 
 ```sh
 archivecraft-cli integrate            # add it for the file managers found on this computer
@@ -75,10 +82,10 @@ planned and use the same `integration` module.
 
 ## Window switches
 
-`archivecraft [paths…]` opens folders or archives. `--add`, `--add-zip`, `--extract-here` and
-`--extract-folder` are what the right-click actions call. `--screenshot out.png` draws about
-120 frames, saves the window and exits; `--self-test out.json` drives the window with scripted
-mouse input and writes what passed.
+`archivecraft [paths…]` opens folders or archives. `--add`, `--add-zip`, `--extract`,
+`--extract-here`, `--extract-folder`, `--test` and `--convert` are what the right-click actions
+call. `--screenshot out.png` draws about 120 frames, saves the window and exits;
+`--self-test out.json` drives the window with scripted mouse input and writes what passed.
 
 ## Clean room
 

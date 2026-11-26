@@ -52,12 +52,52 @@ pub fn show_job(app: &mut App, ctx: &egui::Context) {
                     });
                     ui.add(egui::ProgressBar::new(p.fraction()).show_percentage());
                 });
+                if job.show_details {
+                    let diags = job.ctl.diags.lock().map(|d| d.clone()).unwrap_or_default();
+                    egui::Frame::group(ui.style()).show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        egui::ScrollArea::vertical().max_height(150.0).auto_shrink([false, false]).stick_to_bottom(true).show(ui, |ui| {
+                            if !p.archive.is_empty() {
+                                ui.label(egui::RichText::new(&p.archive).monospace().strong());
+                            }
+                            if !p.stage.is_empty() {
+                                ui.label(egui::RichText::new(format!("{}...", p.stage)).monospace());
+                            }
+                            if !p.current.is_empty() {
+                                ui.label(egui::RichText::new(format!("---> {}", p.current)).monospace().weak());
+                            }
+                            for d in &diags {
+                                let prefix = match d.severity {
+                                    Severity::Info => "   ",
+                                    Severity::Warning => " ! ",
+                                    Severity::Error => " × ",
+                                };
+                                let line = if d.archive.is_empty() {
+                                    format!("{prefix}{}", d.message)
+                                } else {
+                                    format!("{prefix}{}: {}", d.archive, d.message)
+                                };
+                                let rt = egui::RichText::new(line).monospace();
+                                let rt = match d.severity {
+                                    Severity::Error => rt.color(icons::RED),
+                                    Severity::Warning => rt.color(icons::AMBER_DARK),
+                                    Severity::Info => rt,
+                                };
+                                ui.label(rt);
+                            }
+                        });
+                    });
+                }
                 ui.horizontal(|ui| {
-                    background = ui.button(tl!("Keep working in the background")).clicked();
+                    background = ui.button(tl!("Background")).clicked();
                     if ui.button(if paused { tl!("Go on") } else { tl!("Pause") }).clicked() {
                         pause = Some(!paused);
                     }
                     cancel = ui.button(tl!("Stop")).clicked();
+                    let det_label = if job.show_details { tl!("Details ▴") } else { tl!("Details ▾") };
+                    if ui.button(det_label).clicked() {
+                        job.show_details = !job.show_details;
+                    }
                 });
             });
         if let Some(pz) = pause {

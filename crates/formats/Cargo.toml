@@ -7,8 +7,8 @@ license.workspace = true
 rust-version.workspace = true
 
 [features]
-default = []
-# Extract-only RAR through the Apache-2.0 `rars` crate. Off by default.
+default = ["rar"]
+# Extract-only RAR through the Apache-2.0 `rars` crate.
 rar = ["dep:rars", "archivecraft-model/rar"]
 
 [dependencies]

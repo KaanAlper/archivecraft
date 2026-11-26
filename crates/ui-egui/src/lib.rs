@@ -16,7 +16,7 @@ mod settings;
 mod state;
 
 pub use app::{Launch, LaunchAction};
-use archivecraft_engine::integration::{ARG_ADD_DIALOG, ARG_ADD_ZIP, ARG_EXTRACT_FOLDER, ARG_EXTRACT_HERE};
+use archivecraft_engine::integration::{ARG_ADD_DIALOG, ARG_ADD_ZIP, ARG_CONVERT, ARG_EXTRACT_DIALOG, ARG_EXTRACT_FOLDER, ARG_EXTRACT_HERE, ARG_TEST};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -33,10 +33,13 @@ pub fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Launch, Stri
             "--self-test" => l.self_test = Some(PathBuf::from(it.next().ok_or("--self-test needs a file name")?)),
             x if x == ARG_ADD_DIALOG => action = Some(ARG_ADD_DIALOG),
             x if x == ARG_ADD_ZIP => action = Some(ARG_ADD_ZIP),
+            x if x == ARG_EXTRACT_DIALOG => action = Some(ARG_EXTRACT_DIALOG),
             x if x == ARG_EXTRACT_HERE => action = Some(ARG_EXTRACT_HERE),
             x if x == ARG_EXTRACT_FOLDER => action = Some(ARG_EXTRACT_FOLDER),
+            x if x == ARG_TEST => action = Some(ARG_TEST),
+            x if x == ARG_CONVERT => action = Some(ARG_CONVERT),
             "--help" | "-h" => {
-                return Err("archivecraft [--screenshot out.png] [--self-test out.json] [--add|--add-zip|--extract-here|--extract-folder] [paths…]".into());
+                return Err("archivecraft [--screenshot out.png] [--self-test out.json] [--add|--add-zip|--extract|--extract-here|--extract-folder|--test|--convert] [paths…]".into());
             }
             _ => paths.push(PathBuf::from(a)),
         }
@@ -45,7 +48,10 @@ pub fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Launch, Stri
     l.action = match action {
         Some(a) if a == ARG_ADD_DIALOG => Some(LaunchAction::AddDialog(paths)),
         Some(a) if a == ARG_ADD_ZIP => Some(LaunchAction::AddZip(paths)),
+        Some(a) if a == ARG_EXTRACT_DIALOG => Some(LaunchAction::ExtractDialog(paths)),
         Some(a) if a == ARG_EXTRACT_HERE => Some(LaunchAction::ExtractHere(paths)),
+        Some(a) if a == ARG_TEST => Some(LaunchAction::Test(paths)),
+        Some(a) if a == ARG_CONVERT => Some(LaunchAction::Convert(paths)),
         Some(_) => Some(LaunchAction::ExtractFolder(paths)),
         None => {
             l.open = paths;
@@ -57,12 +63,20 @@ pub fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Launch, Stri
 
 fn native_options(launch: &Launch) -> eframe::NativeOptions {
     let scripted = launch.screenshot.is_some() || launch.self_test.is_some();
+    let (size, min_size) = match &launch.action {
+        Some(LaunchAction::AddDialog(_) | LaunchAction::ExtractDialog(_) | LaunchAction::Convert(_)) => ([700.0, 540.0], [440.0, 320.0]),
+        Some(LaunchAction::AddZip(_) | LaunchAction::ExtractHere(_) | LaunchAction::ExtractFolder(_) | LaunchAction::Test(_)) => ([440.0, 260.0], [380.0, 220.0]),
+        None => ([1000.0, 640.0], [640.0, 400.0]),
+    };
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("ArchiveCraft")
         .with_app_id("archivecraft")
-        .with_inner_size([1000.0, 640.0])
-        .with_min_inner_size([640.0, 400.0])
+        .with_inner_size(size)
+        .with_min_inner_size(min_size)
         .with_drag_and_drop(true);
+    if launch.action.is_some() {
+        viewport = viewport.with_resizable(false);
+    }
     if scripted {
         // Checks must not take the focus from whatever the person is doing.
         viewport = viewport.with_active(false);

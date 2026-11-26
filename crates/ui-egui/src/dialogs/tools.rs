@@ -116,7 +116,7 @@ impl RepairDialog {
     pub fn show(&mut self, app: &mut App, ctx: &egui::Context) -> Flow {
         let mut flow = Flow::Keep;
         let mut open = true;
-        window(tl!("Repair an archive"), "ac-repair").open(&mut open).default_width(460.0).show(ctx, |ui| {
+        window(tl!("Repair an archive"), "ac-repair").open(&mut open).resizable(false).default_width(460.0).show(ctx, |ui| {
             ui.label(egui::RichText::new(self.archive.display().to_string()).strong());
             ui.label(if archivecraft_engine::par2::find_for(&self.archive).is_some() {
                 tl!("Recovery data was found: damaged parts can be rebuilt exactly.")
@@ -125,10 +125,9 @@ impl RepairDialog {
             });
             ui.add_space(6.0);
             ui.label(tl!("Put the repaired archive in"));
-            ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut self.out).desired_width(ui.available_width() - 90.0));
+            super::text_row(ui, &mut self.out, None, |ui, out| {
                 if ui.button(tl!("Browse…")).clicked() {
-                    app.pick(Pick::RepairOut, craft_dialogs::Kind::Folder, tl!("Where should the repaired archive go?"), Some(PathBuf::from(&self.out)), None, false);
+                    app.pick(Pick::RepairOut, craft_dialogs::Kind::Folder, tl!("Where should the repaired archive go?"), Some(PathBuf::from(out)), None, false);
                 }
             });
             group(ui, &tl!("Treat the damaged file as"), |ui| {
@@ -168,7 +167,7 @@ impl ConvertDialog {
     pub fn show(&mut self, app: &mut App, ctx: &egui::Context) -> Flow {
         let mut flow = Flow::Keep;
         let mut open = true;
-        window(tl!("Convert archives"), "ac-convert").open(&mut open).default_width(480.0).show(ctx, |ui| {
+        window(tl!("Convert archives"), "ac-convert").open(&mut open).resizable(false).default_width(480.0).show(ctx, |ui| {
             if self.sources.is_empty() {
                 ui.label(tl!("Choose archives in the list first, or open one."));
             }
@@ -194,10 +193,9 @@ impl ConvertDialog {
                 });
             });
             ui.label(tl!("Save them in"));
-            ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut self.out).desired_width(ui.available_width() - 90.0));
+            super::text_row(ui, &mut self.out, None, |ui, out| {
                 if ui.button(tl!("Browse…")).clicked() {
-                    app.pick(Pick::ConvertOut, craft_dialogs::Kind::Folder, tl!("Save converted archives in"), Some(PathBuf::from(&self.out)), None, false);
+                    app.pick(Pick::ConvertOut, craft_dialogs::Kind::Folder, tl!("Save converted archives in"), Some(PathBuf::from(out)), None, false);
                 }
             });
             ui.checkbox(&mut self.recycle, tl!("Move the originals to the recycle bin afterwards"));

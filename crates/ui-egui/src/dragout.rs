@@ -47,6 +47,14 @@ pub fn start(app: &mut App, frame: &eframe::Frame, items: Vec<String>) {
     if paths.is_empty() {
         return;
     }
+    start_paths(app, frame, paths);
+}
+
+pub fn start_paths(app: &mut App, frame: &eframe::Frame, paths: Vec<std::path::PathBuf>) {
+    let paths: Vec<std::path::PathBuf> = paths.into_iter().filter(|p| p.exists()).collect();
+    if paths.is_empty() {
+        return;
+    }
     if let Err(e) = drag::start_drag(frame, drag::DragItem::Files(paths), drag::Image::Raw(preview_png()), |_, _| {}, drag::Options::default()) {
         app.note(format!("{}: {e:?}", tl!("Dragging out did not start")));
     }

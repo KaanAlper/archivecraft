@@ -31,10 +31,12 @@ pub struct Job<T: Send + 'static> {
     pub asking: Option<(Question, Sender<Answer>)>,
     /// Hidden behind the status bar instead of in its own window.
     pub background: bool,
+    /// Whether the live details/log panel is expanded in the progress window.
+    pub show_details: bool,
 }
 
 impl<T: Send + 'static> Job<T> {
-    pub fn spawn(kind: JobKind, title: String, ctx: egui::Context, work: impl FnOnce(&Ctl) -> T + Send + 'static) -> Job<T> {
+    pub fn spawn(kind: JobKind, title: String, ctx: egui::Context, low_priority: bool, work: impl FnOnce(&Ctl) -> T + Send + 'static) -> Job<T> {
         let (tx, rx) = channel::<(Question, Sender<Answer>)>();
         let wake = ctx.clone();
         let ctl = Ctl::with_asker(Box::new(move |q| {
@@ -49,12 +51,15 @@ impl<T: Send + 'static> Job<T> {
         let handle = std::thread::Builder::new()
             .name(format!("archivecraft-{kind:?}"))
             .spawn(move || {
+                if low_priority {
+                    lower_thread_priority();
+                }
                 let out = work(&c);
                 ctx.request_repaint();
                 out
             })
             .expect("a worker thread can start");
-        Job { kind, title, ctl, handle: Some(handle), questions: rx, asking: None, background: false }
+        Job { kind, title, ctl, handle: Some(handle), questions: rx, asking: None, background: false, show_details: kind == JobKind::Repair }
     }
 
     /// Pick up a waiting question, if any.
@@ -82,5 +87,15 @@ impl<T: Send + 'static> Job<T> {
             return None;
         }
         self.handle.take().and_then(|h| h.join().ok())
+    }
+}
+
+fn lower_thread_priority() {
+    #[cfg(target_os = "linux")]
+    unsafe {
+        unsafe extern "C" {
+            fn nice(inc: i32) -> i32;
+        }
+        let _ = nice(10);
     }
 }

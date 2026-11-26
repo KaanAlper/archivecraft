@@ -12,6 +12,8 @@ pub enum Format {
     TarZst,
     /// Read-only, and only when built with the `rar` feature.
     Rar,
+    /// Read-only ISO-9660 disc image.
+    Iso,
 }
 
 impl Format {
@@ -34,6 +36,7 @@ impl Format {
             Format::TarXz => "TAR.XZ",
             Format::TarZst => "TAR.ZST",
             Format::Rar => "RAR",
+            Format::Iso => "ISO",
         }
     }
 
@@ -47,6 +50,7 @@ impl Format {
             Format::TarXz => "Tape archive, xz-compressed",
             Format::TarZst => "Tape archive, Zstandard-compressed",
             Format::Rar => "RAR package (read-only)",
+            Format::Iso => "ISO disc image (read-only)",
         }
     }
 
@@ -59,6 +63,7 @@ impl Format {
             Format::TarXz => "tar.xz",
             Format::TarZst => "tar.zst",
             Format::Rar => "rar",
+            Format::Iso => "iso",
         }
     }
 
@@ -72,12 +77,13 @@ impl Format {
             "tar.xz" | "txz" | "tarxz" | "xz" => Format::TarXz,
             "tar.zst" | "tzst" | "tarzst" | "zst" | "tar.zstd" => Format::TarZst,
             "rar" => Format::Rar,
+            "iso" => Format::Iso,
             _ => return None,
         })
     }
 
     pub fn can_write(self) -> bool {
-        self != Format::Rar
+        !matches!(self, Format::Rar | Format::Iso)
     }
     /// AES-256 password protection is available.
     pub fn supports_password(self) -> bool {
@@ -97,7 +103,7 @@ impl Format {
         self == Format::Zip
     }
     pub fn supports_levels(self) -> bool {
-        self != Format::Tar && self != Format::Rar
+        !matches!(self, Format::Tar | Format::Rar | Format::Iso)
     }
     /// Whether this build can read the format at all.
     pub fn readable(self) -> bool {
@@ -111,7 +117,7 @@ impl Format {
     pub fn from_name(name: &str) -> Option<Format> {
         let lower = name.to_ascii_lowercase();
         let lower = crate::util::strip_volume_suffix(&lower);
-        let pairs: [(&str, Format); 12] = [
+        let pairs: [(&str, Format); 13] = [
             (".tar.gz", Format::TarGz),
             (".tgz", Format::TarGz),
             (".tar.xz", Format::TarXz),
@@ -124,6 +130,7 @@ impl Format {
             (".7z", Format::SevenZ),
             (".rar", Format::Rar),
             (".jar", Format::Zip),
+            (".iso", Format::Iso),
         ];
         pairs
             .iter()

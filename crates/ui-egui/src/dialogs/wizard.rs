@@ -54,8 +54,7 @@ impl Wizard {
             (1, Path::Unpack) | (1, Path::AddTo) => {
                 ui.label(tl!("Which archive? Type its path, use Browse, or drop it onto this window."));
                 ui.add_space(10.0);
-                ui.horizontal(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut self.archive).desired_width(ui.available_width() - 90.0));
+                super::text_row(ui, &mut self.archive, None, |ui, _| {
                     if ui.button(tl!("Browse…")).clicked() {
                         app.pick(Pick::WizardArchive, craft_dialogs::Kind::Open { multiple: false }, tl!("Choose the archive"), None, None, true);
                     }
@@ -64,8 +63,7 @@ impl Wizard {
             (1, Path::Create) => {
                 ui.label(tl!("Where should the new archive go, and what is it called?"));
                 ui.add_space(10.0);
-                ui.horizontal(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut self.archive).desired_width(ui.available_width() - 90.0));
+                super::text_row(ui, &mut self.archive, None, |ui, _| {
                     if ui.button(tl!("Browse…")).clicked() {
                         app.pick(Pick::WizardNewArchive, craft_dialogs::Kind::Save, tl!("Name the new archive"), None, Some("archive.zip".into()), false);
                     }
@@ -138,13 +136,12 @@ impl Wizard {
             self.files.extend(dropped);
         }
         egui::Modal::new(egui::Id::unique("ac-wizard")).show(ctx, |ui| {
-            ui.set_width(520.0);
-            ui.set_min_height(260.0);
+            ui.set_width(420.0);
             ui.horizontal(|ui| {
                 icons::show(ui, Icon::Guide, 48.0);
                 ui.add_space(10.0);
                 ui.vertical(|ui| {
-                    ui.heading(tl!("Step-by-step guide"));
+                    ui.heading(tl!("Guide"));
                     self.page(ui, app);
                 });
             });
@@ -154,28 +151,28 @@ impl Wizard {
             }
             ui.add_space(8.0);
             ui.separator();
-            ui.horizontal(|ui| {
-                if ui.button(tl!("Help")).clicked() {
+            let btn_size = egui::vec2(88.0, 26.0);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.add(egui::Button::new(tl!("Help")).min_size(btn_size)).clicked() {
                     self.help = !self.help;
                 }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(tl!("Cancel")).clicked() {
+                ui.add_space(8.0);
+                if ui.add(egui::Button::new(tl!("Cancel")).min_size(btn_size)).clicked() {
+                    flow = Flow::Close;
+                }
+                let last = self.step >= self.last_step();
+                let next = if last { tl!("Finish") } else { tl!("Next >") };
+                if ui.add_enabled(self.can_go_on(), egui::Button::new(next).min_size(btn_size)).clicked() {
+                    if last {
+                        self.finish(app);
                         flow = Flow::Close;
+                    } else {
+                        self.step += 1;
                     }
-                    let last = self.step >= self.last_step();
-                    let next = if last { tl!("Finish") } else { tl!("Next >") };
-                    if ui.add_enabled(self.can_go_on(), egui::Button::new(next)).clicked() {
-                        if last {
-                            self.finish(app);
-                            flow = Flow::Close;
-                        } else {
-                            self.step += 1;
-                        }
-                    }
-                    if ui.add_enabled(self.step > 0, egui::Button::new(tl!("< Back"))).clicked() {
-                        self.step -= 1;
-                    }
-                });
+                }
+                if ui.add_enabled(self.step > 0, egui::Button::new(tl!("< Back")).min_size(btn_size)).clicked() {
+                    self.step -= 1;
+                }
             });
         });
         flow

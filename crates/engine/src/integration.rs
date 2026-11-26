@@ -13,18 +13,23 @@ use std::path::{Path, PathBuf};
 /// The command-line switches the right-click actions call.
 pub const ARG_ADD_DIALOG: &str = "--add";
 pub const ARG_ADD_ZIP: &str = "--add-zip";
+pub const ARG_EXTRACT_DIALOG: &str = "--extract";
 pub const ARG_EXTRACT_HERE: &str = "--extract-here";
 pub const ARG_EXTRACT_FOLDER: &str = "--extract-folder";
+pub const ARG_TEST: &str = "--test";
+pub const ARG_CONVERT: &str = "--convert";
 
 /// Archive kinds the app can be the default opener for: (label, MIME types, file endings).
 pub const ASSOCIATIONS: &[(&str, &[&str], &[&str])] = &[
-    ("ZIP", &["application/zip", "application/x-zip-compressed"], &["zip"]),
-    ("7z", &["application/x-7z-compressed"], &["7z"]),
+    ("ZIP", &["application/zip", "application/x-zip", "application/x-zip-compressed"], &["zip"]),
+    ("7z", &["application/x-7z-compressed", "application/x-7z"], &["7z"]),
     ("TAR", &["application/x-tar"], &["tar"]),
-    ("TAR.GZ", &["application/x-compressed-tar", "application/gzip"], &["tgz", "gz"]),
+    ("TAR.GZ", &["application/x-compressed-tar", "application/gzip", "application/x-gzip"], &["tgz", "gz"]),
     ("TAR.XZ", &["application/x-xz-compressed-tar", "application/x-xz"], &["txz", "xz"]),
     ("TAR.ZST", &["application/x-zstd-compressed-tar", "application/zstd"], &["tzst", "zst"]),
-    ("RAR", &["application/vnd.rar", "application/x-rar"], &["rar"]),
+    ("RAR", &["application/vnd.rar", "application/x-rar", "application/x-rar-compressed"], &["rar"]),
+    ("JAR", &["application/java-archive", "application/x-java-archive"], &["jar"]),
+    ("ISO", &["application/x-cd-image", "application/x-iso9660-image", "application/vnd.efi.iso"], &["iso"]),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
@@ -56,7 +61,11 @@ from urllib.parse import unquote, urlparse
 from gi.repository import GObject, Nautilus
 
 EXE = "@EXE@"
-ARCHIVES = (".zip", ".7z", ".tar", ".gz", ".tgz", ".xz", ".txz", ".zst", ".tzst", ".rar", ".001")
+CASCADED = @CASCADED@
+MENU_ICONS = @MENU_ICONS@
+ARCHIVES = (".zip", ".jar", ".7z", ".tar", ".gz", ".tgz", ".xz", ".txz", ".zst", ".tzst", ".rar", ".iso", ".001")
+PACK_ENTRIES = @PACK_ENTRIES@
+ARCHIVE_ENTRIES = @ARCHIVE_ENTRIES@
 
 
 class ArchiveCraftMenu(GObject.GObject, Nautilus.MenuProvider):
@@ -64,24 +73,35 @@ class ArchiveCraftMenu(GObject.GObject, Nautilus.MenuProvider):
         return [unquote(urlparse(f.get_uri()).path) for f in files if f.get_uri_scheme() == "file"]
 
     def _run(self, _item, arg, paths):
-        subprocess.Popen([EXE, arg] + paths)
+        cmd = [EXE, arg] + paths if arg else [EXE] + paths
+        subprocess.Popen(cmd)
 
     def get_file_items(self, *args):
         files = args[-1]
         paths = self._paths(files)
         if not paths:
             return []
-        top = Nautilus.MenuItem(name="ArchiveCraft::top", label="ArchiveCraft", icon="archivecraft")
-        sub = Nautilus.Menu()
-        top.set_submenu(sub)
-        entries = [("add", "Pack into an archive…", "--add"), ("addzip", "Pack into a ZIP right away", "--add-zip")]
+        entries = list(PACK_ENTRIES)
         if all(p.lower().endswith(ARCHIVES) for p in paths):
-            entries += [("here", "Unpack here", "--extract-here"), ("folder", "Unpack into its own folder", "--extract-folder")]
+            entries += list(ARCHIVE_ENTRIES)
+        if not entries:
+            return []
+        icon = "archivecraft" if MENU_ICONS else ""
+        if CASCADED:
+            top = Nautilus.MenuItem(name="ArchiveCraft::top", label="ArchiveCraft", icon=icon)
+            sub = Nautilus.Menu()
+            top.set_submenu(sub)
+            for key, label, arg in entries:
+                item = Nautilus.MenuItem(name="ArchiveCraft::" + key, label=label, icon=icon)
+                item.connect("activate", self._run, arg, paths)
+                sub.append_item(item)
+            return [top]
+        out = []
         for key, label, arg in entries:
-            item = Nautilus.MenuItem(name="ArchiveCraft::" + key, label=label, icon="archivecraft")
+            item = Nautilus.MenuItem(name="ArchiveCraft::" + key, label=label, icon=icon)
             item.connect("activate", self._run, arg, paths)
-            sub.append_item(item)
-        return [top]
+            out.append(item)
+        return out
 "#;
 
 /// ArchiveCraft's own icon (an amber parcel with a teal band), drawn in code as a PNG.
@@ -167,14 +187,68 @@ struct Action {
     archives_only: bool,
 }
 
-const ACTIONS: [Action; 4] = [
+const ACTIONS: [Action; 7] = [
     Action { id: "add", label: "Pack into an archive…", arg: ARG_ADD_DIALOG, archives_only: false },
     Action { id: "addzip", label: "Pack into a ZIP right away", arg: ARG_ADD_ZIP, archives_only: false },
-    Action { id: "here", label: "Unpack here", arg: ARG_EXTRACT_HERE, archives_only: true },
+    Action { id: "extract", label: "Extract files…", arg: ARG_EXTRACT_DIALOG, archives_only: true },
+    Action { id: "here", label: "Extract Here", arg: ARG_EXTRACT_HERE, archives_only: true },
     Action { id: "folder", label: "Unpack into its own folder", arg: ARG_EXTRACT_FOLDER, archives_only: true },
+    Action { id: "test", label: "Test archive", arg: ARG_TEST, archives_only: true },
+    Action { id: "convert", label: "Convert archive…", arg: ARG_CONVERT, archives_only: true },
 ];
 
-const ARCHIVE_EXTS: &[&str] = &["zip", "7z", "tar", "gz", "tgz", "xz", "txz", "zst", "tzst", "rar", "001"];
+/// Options controlling which context-menu actions and presentation flags are written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InstallOptions {
+    pub desktop_shortcut: bool,
+    pub cascaded_menus: bool,
+    pub menu_icons: bool,
+    pub open: bool,
+    pub extract_dialog: bool,
+    pub extract_here: bool,
+    pub extract_folder: bool,
+    pub add_dialog: bool,
+    pub add_zip: bool,
+    pub test_archive: bool,
+    pub convert_archive: bool,
+    pub always_pack_for: String,
+}
+
+impl Default for InstallOptions {
+    fn default() -> Self {
+        InstallOptions {
+            desktop_shortcut: false,
+            cascaded_menus: true,
+            menu_icons: true,
+            open: true,
+            extract_dialog: true,
+            extract_here: true,
+            extract_folder: true,
+            add_dialog: true,
+            add_zip: true,
+            test_archive: false,
+            convert_archive: false,
+            always_pack_for: "*.iso".into(),
+        }
+    }
+}
+
+impl InstallOptions {
+    fn action_enabled(&self, id: &str) -> bool {
+        match id {
+            "add" => self.add_dialog,
+            "addzip" => self.add_zip,
+            "extract" => self.extract_dialog,
+            "here" => self.extract_here,
+            "folder" => self.extract_folder,
+            "test" => self.test_archive,
+            "convert" => self.convert_archive,
+            _ => true,
+        }
+    }
+}
+
+const ARCHIVE_EXTS: &[&str] = &["zip", "jar", "7z", "tar", "gz", "tgz", "xz", "txz", "zst", "tzst", "rar", "iso", "001"];
 
 fn quote(exe: &Path) -> String {
     let s = exe.display().to_string();
@@ -231,14 +305,20 @@ fn strip_thunar(text: &str) -> String {
     out
 }
 
-/// Install the chosen integrations on Linux. Returns the files written.
+/// Install the chosen integrations on Linux using default options. Returns the files written.
 pub fn install(exe: &Path, places: &Places, targets: Targets) -> Result<Vec<PathBuf>> {
+    install_with_options(exe, places, targets, &InstallOptions::default())
+}
+
+/// Install the chosen integrations on Linux with custom menu options. Returns the files written.
+pub fn install_with_options(exe: &Path, places: &Places, targets: Targets, opts: &InstallOptions) -> Result<Vec<PathBuf>> {
     if !cfg!(all(unix, not(target_os = "macos"))) {
         return Err(Error::Unsupported("file-manager integration is available on Linux in this version".into()));
     }
     let mut written = Vec::new();
     let cmd = quote(exe);
-    if targets != Targets::default() {
+    let active: Vec<&Action> = ACTIONS.iter().filter(|a| opts.action_enabled(a.id)).collect();
+    if targets != Targets::default() || opts.desktop_shortcut {
         let icon = places.icon();
         if let Some(p) = icon.parent() {
             fs::create_dir_all(p)?;
@@ -246,43 +326,103 @@ pub fn install(exe: &Path, places: &Places, targets: Targets) -> Result<Vec<Path
         fs::write(&icon, icon_png(128))?;
         written.push(icon);
     }
-    if targets.desktop_entry {
+    let build_desktop = || {
         let mut t = format!(
             "[Desktop Entry]\nType=Application\nName=ArchiveCraft\nGenericName=Archive manager\nComment=Open, create and unpack archives\nExec={cmd} %F\nIcon=archivecraft\nTerminal=false\nCategories=Utility;Archiving;Compression;\nMimeType={};\nActions={};\n",
             all_mimes().join(";"),
-            ACTIONS.iter().map(|a| a.id).collect::<Vec<_>>().join(";")
+            active.iter().map(|a| a.id).collect::<Vec<_>>().join(";")
         );
-        for a in &ACTIONS {
+        for a in &active {
             t.push_str(&format!("\n[Desktop Action {}]\nName={}\nExec={cmd} {} %F\n", a.id, a.label, a.arg));
         }
-        write(&places.desktop(), &t, false, &mut written)?;
+        t
+    };
+    if targets.desktop_entry {
+        write(&places.desktop(), &build_desktop(), false, &mut written)?;
+    }
+    if opts.desktop_shortcut
+        && let Some(desk) = dirs::desktop_dir()
+    {
+        write(&desk.join("archivecraft.desktop"), &build_desktop(), true, &mut written)?;
     }
     if targets.nautilus {
-        // A real "ArchiveCraft" submenu (needs nautilus-python); the scripts below work without it.
-        let ext = NAUTILUS_EXTENSION.replace("@EXE@", &exe.display().to_string().replace('\\', "\\\\").replace('"', "\\\""));
+        let py_list = |items: &[(&str, &str, &str)]| {
+            let inner: Vec<String> = items
+                .iter()
+                .map(|(k, l, a)| format!("(\"{}\", \"{}\", \"{}\")", k, l.replace('"', "\\\""), a))
+                .collect();
+            format!("[{}]", inner.join(", "))
+        };
+        let pack_items: Vec<(&str, &str, &str)> = active.iter().filter(|a| !a.archives_only).map(|a| (a.id, a.label, a.arg)).collect();
+        let mut arch_items: Vec<(&str, &str, &str)> = Vec::new();
+        if opts.open {
+            arch_items.push(("open", "Open with ArchiveCraft", ""));
+        }
+        arch_items.extend(active.iter().filter(|a| a.archives_only).map(|a| (a.id, a.label, a.arg)));
+        let ext = NAUTILUS_EXTENSION
+            .replace("@EXE@", &exe.display().to_string().replace('\\', "\\\\").replace('"', "\\\""))
+            .replace("@CASCADED@", if opts.cascaded_menus { "True" } else { "False" })
+            .replace("@MENU_ICONS@", if opts.menu_icons { "True" } else { "False" })
+            .replace("@PACK_ENTRIES@", &py_list(&pack_items))
+            .replace("@ARCHIVE_ENTRIES@", &py_list(&arch_items));
         write(&places.nautilus_extension(), &ext, false, &mut written)?;
-        for a in &ACTIONS {
+        for a in &active {
             let script = format!("#!/bin/sh\n# ArchiveCraft right-click action\nexec {} {} \"$@\"\n", shell_quote(&exe.display().to_string()), a.arg);
             write(&places.nautilus().join(a.label.trim_end_matches('…')), &script, true, &mut written)?;
         }
     }
     if targets.dolphin {
-        let files = format!(
-            "[Desktop Entry]\nType=Service\nMimeType=all/allfiles;inode/directory;\nX-KDE-ServiceTypes=KonqPopupMenu/Plugin\nX-KDE-Submenu=ArchiveCraft\nIcon=archivecraft\nActions=acadd;acaddzip;\n\n[Desktop Action acadd]\nName={}\nIcon=archivecraft\nExec={cmd} {} %F\n\n[Desktop Action acaddzip]\nName={}\nIcon=archivecraft\nExec={cmd} {} %F\n",
-            ACTIONS[0].label, ACTIONS[0].arg, ACTIONS[1].label, ACTIONS[1].arg
-        );
-        write(&places.dolphin().join("archivecraft-pack.desktop"), &files, true, &mut written)?;
-        let archives = format!(
-            "[Desktop Entry]\nType=Service\nMimeType={};\nX-KDE-ServiceTypes=KonqPopupMenu/Plugin\nX-KDE-Submenu=ArchiveCraft\nIcon=archivecraft\nActions=achere;acfolder;\n\n[Desktop Action achere]\nName={}\nIcon=archivecraft\nExec={cmd} {} %F\n\n[Desktop Action acfolder]\nName={}\nIcon=archivecraft\nExec={cmd} {} %F\n",
-            all_mimes().join(";"),
-            ACTIONS[2].label, ACTIONS[2].arg, ACTIONS[3].label, ACTIONS[3].arg
-        );
-        write(&places.dolphin().join("archivecraft-unpack.desktop"), &archives, true, &mut written)?;
+        let icon_line = if opts.menu_icons { "Icon=archivecraft\n" } else { "" };
+        let sub_line = if opts.cascaded_menus { "X-KDE-Submenu=ArchiveCraft\n" } else { "" };
+        let always_exts: Vec<String> = opts
+            .always_pack_for
+            .split(|c: char| c.is_whitespace() || c == ';' || c == ',')
+            .map(|s| s.trim().trim_start_matches("*.").trim_start_matches('.').to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+        let exclude_mimes: Vec<&str> = ASSOCIATIONS
+            .iter()
+            .filter(|(l, _, exts)| (*l != "RAR" || cfg!(feature = "rar")) && !exts.iter().any(|e| always_exts.iter().any(|ae| ae == e)))
+            .flat_map(|(_, m, _)| m.iter().copied())
+            .collect();
+        let pack_actions: Vec<&Action> = active.iter().copied().filter(|a| !a.archives_only).collect();
+        if !pack_actions.is_empty() {
+            let ids: Vec<String> = pack_actions.iter().map(|a| format!("ac{}", a.id)).collect();
+            let mut files = format!(
+                "[Desktop Entry]\nType=Service\nMimeType=all/allfiles;inode/directory;\nExcludeMimeTypes={};\nX-KDE-ServiceTypes=KonqPopupMenu/Plugin\nX-KDE-Priority=TopLevel\n{sub_line}{icon_line}Actions={};\n",
+                exclude_mimes.join(";"),
+                ids.join(";")
+            );
+            for a in &pack_actions {
+                files.push_str(&format!("\n[Desktop Action ac{}]\nName={}\n{icon_line}Exec={cmd} {} %F\n", a.id, a.label, a.arg));
+            }
+            write(&places.dolphin().join("archivecraft-pack.desktop"), &files, true, &mut written)?;
+        }
+        let mimes = all_mimes().join(";");
+        let mut unpack_ids: Vec<String> = Vec::new();
+        let mut unpack_body = String::new();
+        if opts.open {
+            unpack_ids.push("acopen".into());
+            unpack_body.push_str(&format!("\n[Desktop Action acopen]\nName=Open with ArchiveCraft\n{icon_line}Exec={cmd} %F\n"));
+        }
+        for a in active.iter().filter(|a| a.archives_only) {
+            let id = format!("ac{}", a.id);
+            unpack_ids.push(id.clone());
+            unpack_body.push_str(&format!("\n[Desktop Action {id}]\nName={}\n{icon_line}Exec={cmd} {} %F\n", a.label, a.arg));
+        }
+        if !unpack_ids.is_empty() {
+            let archives = format!(
+                "[Desktop Entry]\nType=Service\nMimeType={mimes};\nX-KDE-ServiceTypes=KonqPopupMenu/Plugin\nX-KDE-Priority=TopLevel\n{sub_line}{icon_line}Actions={};\n{unpack_body}",
+                unpack_ids.join(";")
+            );
+            write(&places.dolphin().join("archivecraft-unpack.desktop"), &archives, true, &mut written)?;
+        }
     }
     if targets.nemo {
-        for a in &ACTIONS {
+        let icon_line = if opts.menu_icons { "Icon-Name=archivecraft\n" } else { "" };
+        for a in &active {
             let ext = if a.archives_only { ARCHIVE_EXTS.join(";") } else { "any".into() };
-            let t = format!("[Nemo Action]\nName={}\nComment=ArchiveCraft\nExec={cmd} {} %F\nIcon-Name=archivecraft\nSelection=notnone\nExtensions={ext};\n", a.label, a.arg);
+            let t = format!("[Nemo Action]\nName={}\nComment=ArchiveCraft\nExec={cmd} {} %F\n{icon_line}Selection=notnone\nExtensions={ext};\n", a.label, a.arg);
             write(&places.nemo().join(format!("archivecraft-{}.nemo_action", a.id)), &t, false, &mut written)?;
         }
     }
@@ -292,11 +432,12 @@ pub fn install(exe: &Path, places: &Places, targets: Targets) -> Result<Vec<Path
         let mut text = strip_thunar(&old);
         let mut block = String::from(THUNAR_BEGIN);
         block.push('\n');
-        for a in &ACTIONS {
+        let icon_xml = if opts.menu_icons { "\t<icon>archivecraft</icon>\n" } else { "" };
+        for a in &active {
             let patterns = if a.archives_only { ARCHIVE_EXTS.iter().map(|e| format!("*.{e}")).collect::<Vec<_>>().join(";") } else { "*".into() };
             let kinds = if a.archives_only { "<other-files/>" } else { "<directories/><audio-files/><image-files/><other-files/><text-files/><video-files/>" };
             block.push_str(&format!(
-                "<action>\n\t<icon>archivecraft</icon>\n\t<name>{}</name>\n\t<unique-id>archivecraft-{}</unique-id>\n\t<command>{} {} %F</command>\n\t<description>ArchiveCraft</description>\n\t<patterns>{patterns}</patterns>\n\t{kinds}\n</action>\n",
+                "<action>\n{icon_xml}\t<name>{}</name>\n\t<unique-id>archivecraft-{}</unique-id>\n\t<command>{} {} %F</command>\n\t<description>ArchiveCraft</description>\n\t<patterns>{patterns}</patterns>\n\t{kinds}\n</action>\n",
                 xml_escape(a.label), a.id, xml_escape(&cmd), a.arg
             ));
         }
@@ -328,6 +469,9 @@ pub fn uninstall(places: &Places) -> Result<Vec<PathBuf>> {
         }
     };
     rm(places.desktop());
+    if let Some(desk) = dirs::desktop_dir() {
+        rm(desk.join("archivecraft.desktop"));
+    }
     rm(places.nautilus());
     rm(places.nautilus_extension());
     rm(places.icon());
@@ -440,6 +584,11 @@ mod tests {
         assert_eq!(installed(&places), Targets::all());
         let desktop = fs::read_to_string(places.desktop()).unwrap();
         assert!(desktop.contains("Exec=\"/opt/Archive Craft/archivecraft\" --extract-here %F"));
+        let pack = fs::read_to_string(places.dolphin().join("archivecraft-pack.desktop")).unwrap();
+        assert!(pack.contains("ExcludeMimeTypes="));
+        let unpack = fs::read_to_string(places.dolphin().join("archivecraft-unpack.desktop")).unwrap();
+        assert!(unpack.contains("Actions=acopen;acextract;achere;acfolder;"));
+        assert!(unpack.contains("X-KDE-Submenu=ArchiveCraft"));
         let uca = fs::read_to_string(places.thunar()).unwrap();
         assert!(uca.contains("Theirs") && uca.contains("archivecraft-add"));
         // Installing twice does not duplicate Thunar actions.
@@ -464,5 +613,33 @@ mod tests {
         assert_eq!(current_defaults(&places), vec!["ZIP".to_string(), "7z".to_string()]);
         set_defaults(&places, &[]).unwrap();
         assert!(current_defaults(&places).is_empty());
+    }
+
+    #[test]
+    fn install_with_options_respects_flags() {
+        let dir = tempfile::tempdir().unwrap();
+        let places = Places { data: dir.path().join("data"), config: dir.path().join("config") };
+        let exe = Path::new("/usr/bin/archivecraft");
+        let opts = InstallOptions {
+            desktop_shortcut: false,
+            cascaded_menus: false,
+            menu_icons: false,
+            open: false,
+            test_archive: true,
+            convert_archive: true,
+            always_pack_for: "*.iso".into(),
+            ..InstallOptions::default()
+        };
+        install_with_options(exe, &places, Targets::all(), &opts).unwrap();
+        let unpack = fs::read_to_string(places.dolphin().join("archivecraft-unpack.desktop")).unwrap();
+        assert!(!unpack.contains("X-KDE-Submenu="));
+        assert!(!unpack.contains("Icon=archivecraft"));
+        assert!(!unpack.contains("acopen"));
+        assert!(unpack.contains("actest") && unpack.contains("acconvert"));
+        let pack = fs::read_to_string(places.dolphin().join("archivecraft-pack.desktop")).unwrap();
+        assert!(!pack.contains("application/x-cd-image"));
+        let nautilus = fs::read_to_string(places.nautilus_extension()).unwrap();
+        assert!(nautilus.contains("CASCADED = False") && nautilus.contains("MENU_ICONS = False"));
+        assert!(nautilus.contains("--test") && nautilus.contains("--convert"));
     }
 }

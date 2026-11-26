@@ -3,6 +3,7 @@
 
 mod conv;
 pub mod detect;
+pub mod isofmt;
 pub mod rarfmt;
 pub mod read;
 pub mod sevenzfmt;

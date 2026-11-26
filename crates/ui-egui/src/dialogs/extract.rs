@@ -103,13 +103,12 @@ impl ExtractDialog {
 
     fn general(&mut self, ui: &mut egui::Ui, app: &mut App) {
         ui.label(tl!("Unpack into (created if missing)"));
-        ui.horizontal(|ui| {
-            ui.add(egui::TextEdit::singleline(&mut self.dest).desired_width(ui.available_width() - 190.0));
-            if ui.button(tl!("Browse…")).clicked() {
-                app.pick(Pick::ExtractDest, craft_dialogs::Kind::Folder, tl!("Unpack into which folder?"), Some(PathBuf::from(&self.dest)), None, false);
-            }
+        super::text_row(ui, &mut self.dest, None, |ui, dest| {
             if ui.button(tl!("New folder")).clicked() {
                 self.new_folder = Some(String::new());
+            }
+            if ui.button(tl!("Browse…")).clicked() {
+                app.pick(Pick::ExtractDest, craft_dialogs::Kind::Folder, tl!("Unpack into which folder?"), Some(PathBuf::from(dest)), None, false);
             }
         });
         if let Some(name) = &mut self.new_folder {
@@ -158,7 +157,7 @@ impl ExtractDialog {
             });
             egui::Frame::group(c[1].style()).show(&mut c[1], |ui| {
                 ui.set_min_height(300.0);
-                egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
+                egui::ScrollArea::both().max_height(300.0).auto_shrink(false).show(ui, |ui| {
                     if let Some(h) = dirs::home_dir() {
                         self.tree_node(ui, h, tl!("Home"), 0);
                     }

@@ -1,6 +1,6 @@
 //! Search: names and contents, in a folder and inside the archives there.
 
-use super::{group, ok_cancel, window, Flow};
+use super::{group, window, Flow};
 use crate::rows::RowRef;
 use crate::state::{App, Pick};
 use crate::{tf, tl};
@@ -12,58 +12,123 @@ pub struct FindDialog {
     pub names: String,
     pub text: String,
     pub match_case: bool,
+    pub all_tables: bool,
     pub hex: bool,
     pub root: String,
     pub types: String,
     pub subfolders: bool,
+    pub in_files: bool,
     pub inside: bool,
     pub skip_locked: bool,
+    help: bool,
 }
 
 impl FindDialog {
     pub fn new(root: PathBuf) -> Self {
-        FindDialog { names: "*".into(), text: String::new(), match_case: false, hex: false, root: root.display().to_string(), types: "*".into(), subfolders: true, inside: true, skip_locked: true }
+        Self::from_saved(root, &crate::settings::FindDefaults::default())
+    }
+
+    pub fn from_saved(root: PathBuf, saved: &crate::settings::FindDefaults) -> Self {
+        FindDialog {
+            names: saved.names.clone(),
+            text: saved.text.clone(),
+            match_case: saved.match_case,
+            all_tables: saved.all_tables,
+            hex: saved.hex,
+            root: root.display().to_string(),
+            types: saved.types.clone(),
+            subfolders: saved.subfolders,
+            in_files: saved.in_files,
+            inside: saved.inside,
+            skip_locked: saved.skip_locked,
+            help: false,
+        }
     }
 
     pub fn show(&mut self, app: &mut App, ctx: &egui::Context) -> Flow {
         let mut flow = Flow::Keep;
         let mut open = true;
-        window(tl!("Search"), "ac-find").open(&mut open).default_width(620.0).show(ctx, |ui| {
+        window(tl!("Search"), "ac-find").open(&mut open).resizable(false).default_width(600.0).show(ctx, |ui| {
+            ui.set_width(600.0);
             ui.columns(2, |c| {
                 group(&mut c[0], &tl!("Look for"), |ui| {
+                    ui.set_min_height(195.0);
                     ui.label(tl!("Names like"));
-                    ui.text_edit_singleline(&mut self.names);
+                    ui.add(egui::TextEdit::singleline(&mut self.names).desired_width(f32::INFINITY));
+                    ui.add_space(4.0);
                     ui.label(tl!("Containing the text"));
-                    ui.text_edit_singleline(&mut self.text);
+                    ui.add(egui::TextEdit::singleline(&mut self.text).desired_width(f32::INFINITY));
+                    ui.add_space(6.0);
                     ui.checkbox(&mut self.match_case, tl!("Capital letters must match"));
+                    ui.checkbox(&mut self.all_tables, tl!("Search all encoding tables"));
                     ui.checkbox(&mut self.hex, tl!("The text is bytes in hexadecimal"));
                 });
                 group(&mut c[1], &tl!("Look in"), |ui| {
+                    ui.set_min_height(195.0);
                     ui.label(tl!("Folder"));
-                    ui.horizontal(|ui| {
-                        ui.add(egui::TextEdit::singleline(&mut self.root).desired_width(ui.available_width() - 80.0));
+                    super::text_row(ui, &mut self.root, None, |ui, root| {
                         if ui.button(tl!("Browse…")).clicked() {
-                            app.pick(Pick::FindFolder, craft_dialogs::Kind::Folder, tl!("Search in which folder?"), Some(PathBuf::from(&self.root)), None, false);
+                            app.pick(Pick::FindFolder, craft_dialogs::Kind::Folder, tl!("Search in which folder?"), Some(PathBuf::from(root)), None, false);
                         }
                     });
+                    ui.add_space(4.0);
                     ui.label(tl!("Archive types to open"));
-                    ui.text_edit_singleline(&mut self.types);
+                    ui.add(egui::TextEdit::singleline(&mut self.types).desired_width(f32::INFINITY));
+                    ui.add_space(6.0);
                     ui.checkbox(&mut self.subfolders, tl!("Also the folders inside"));
+                    ui.checkbox(&mut self.in_files, tl!("Find in files"));
                     ui.checkbox(&mut self.inside, tl!("Also inside archives"));
                     ui.checkbox(&mut self.skip_locked, tl!("Skip locked items"));
                 });
             });
-            let (ok, cancel) = ok_cancel(ui, &tl!("Search"), !self.root.trim().is_empty());
-            if cancel {
-                flow = Flow::Close;
+            if self.help {
+                ui.add_space(4.0);
+                ui.label(egui::RichText::new(tl!("Use wildcards like *.txt or report*; separate several with spaces.")).weak());
             }
-            if ok {
+            ui.separator();
+            let btn_size = egui::vec2(88.0, 26.0);
+            let mut start = false;
+            let mut save = false;
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.add(egui::Button::new(tl!("Help")).min_size(btn_size)).clicked() {
+                    self.help = !self.help;
+                }
+                ui.add_space(8.0);
+                if ui.add(egui::Button::new(tl!("Save")).min_size(btn_size)).clicked() {
+                    save = true;
+                }
+                if ui.add(egui::Button::new(tl!("Cancel")).min_size(btn_size)).clicked() {
+                    flow = Flow::Close;
+                }
+                if ui.add_enabled(!self.root.trim().is_empty(), egui::Button::new(tl!("Search")).min_size(btn_size)).clicked() {
+                    start = true;
+                }
+            });
+            if save {
+                let saved = crate::settings::FindDefaults {
+                    names: self.names.clone(),
+                    text: self.text.clone(),
+                    match_case: self.match_case,
+                    all_tables: self.all_tables,
+                    hex: self.hex,
+                    types: self.types.clone(),
+                    subfolders: self.subfolders,
+                    in_files: self.in_files,
+                    inside: self.inside,
+                    skip_locked: self.skip_locked,
+                };
+                app.prefs.update(|p| p.saved.find = saved);
+                app.note(tl!("Search settings saved."));
+            }
+            if start {
                 let q = FindQuery {
                     names: parse_patterns(&self.names),
                     text: self.text.clone(),
                     match_case: self.match_case,
+                    all_tables: self.all_tables,
                     hex: self.hex,
                     subfolders: self.subfolders,
+                    in_files: self.in_files,
                     inside_archives: self.inside,
                     archive_types: parse_patterns(&self.types),
                     skip_locked: self.skip_locked,
