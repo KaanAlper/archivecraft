@@ -28,6 +28,7 @@ jobs:
             libgl1-mesa-dev libegl1-mesa-dev pkg-config fuse libfuse2
 
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
 
       - name: Determine version
         id: ver
@@ -135,6 +136,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
 
       - name: Determine version
         id: ver
