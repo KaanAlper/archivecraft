@@ -1,0 +1,15 @@
+[package]
+name = "archivecraft-par2"
+description = "PAR2 recovery data for ArchiveCraft: create, verify and repair (from the public PAR 2.0 specification)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+archivecraft-model = { workspace = true }
+md-5 = { workspace = true }
+crc32fast = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

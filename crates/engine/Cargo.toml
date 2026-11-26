@@ -1,0 +1,27 @@
+[package]
+name = "archivecraft-engine"
+description = "ArchiveCraft operations: add, extract, test, delete, convert, repair, find, speed test and job control"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+rar = ["archivecraft-formats/rar"]
+
+[dependencies]
+archivecraft-model = { workspace = true }
+archivecraft-formats = { workspace = true }
+archivecraft-par2 = { workspace = true }
+chrono = { workspace = true }
+dirs = { workspace = true }
+serde = { workspace = true }
+tempfile = { workspace = true }
+trash = { workspace = true }
+image = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+zip = { workspace = true }
+tar = { workspace = true }

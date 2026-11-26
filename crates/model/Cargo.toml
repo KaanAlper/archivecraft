@@ -1,0 +1,16 @@
+[package]
+name = "archivecraft-model"
+description = "ArchiveCraft shared types: archive items, options, formats, progress, questions and problems"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+chrono = { workspace = true }
+serde = { workspace = true }
+
+[features]
+default = []
+# Set by archivecraft-formats when RAR reading is built in.
+rar = []

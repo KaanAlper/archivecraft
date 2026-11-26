@@ -1,0 +1,41 @@
+[package]
+name = "archivecraft-ui-egui"
+description = "ArchiveCraft's window: main view, dialogs and settings, on egui and the Craft UI libraries"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+rar = ["archivecraft-engine/rar"]
+
+[dependencies]
+archivecraft-engine = { workspace = true }
+craft-ui = { workspace = true, features = ["app"] }
+craft-menu = { workspace = true }
+craft-dialogs = { workspace = true, features = ["ui"] }
+craft-settings = { workspace = true }
+craft-i18n = { workspace = true }
+craft-tracked = { workspace = true }
+craft-host = { workspace = true }
+craft-window = { workspace = true }
+craft-theme = { workspace = true }
+eframe = { workspace = true, features = ["default_fonts", "glow", "wgpu", "accesskit", "wayland", "x11"] }
+egui = { workspace = true, features = ["default_fonts"] }
+egui_extras = { workspace = true }
+image = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+dirs = { workspace = true }
+tempfile = { workspace = true }
+web-time = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Open the window without taking focus for --screenshot / --self-test runs.
+winit = { workspace = true }
+
+[target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
+# Dragging items out of the window to the file manager (not available with winit on Linux).
+drag = { workspace = true }

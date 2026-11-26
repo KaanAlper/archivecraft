@@ -1,0 +1,15 @@
+[package]
+name = "archivecraft"
+description = "ArchiveCraft: an open-source archive manager"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+default-run = "archivecraft"
+
+[features]
+default = []
+rar = ["archivecraft-ui-egui/rar"]
+
+[dependencies]
+archivecraft-ui-egui = { workspace = true }

@@ -1,0 +1,84 @@
+[workspace]
+resolver = "3"
+members = ["apps/*", "crates/*"]
+default-members = ["apps/archivecraft"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.95"
+
+[workspace.dependencies]
+# internal
+archivecraft-model = { path = "crates/model", version = "0.1.0" }
+archivecraft-formats = { path = "crates/formats", version = "0.1.0" }
+archivecraft-par2 = { path = "crates/par2", version = "0.1.0" }
+archivecraft-engine = { path = "crates/engine", version = "0.1.0" }
+archivecraft-ui-egui = { path = "crates/ui-egui", version = "0.1.0" }
+
+# craft-libs: one pinned revision for every craft-* crate.
+craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "90e14375a4a461fb42eba802846250b2473366f7" }
+craft-menu = { git = "https://github.com/storytold/craft-libs", rev = "90e14375a4a461fb42eba802846250b2473366f7" }
+craft-dialogs = { git = "https://github.com/storytold/craft-libs", rev = "90e14375a4a461fb42eba802846250b2473366f7" }
+craft-settings = { git = "https://github.com/storytold/craft-libs", rev = "90e14375a4a461fb42eba802846250b2473366f7" }
+craft-i18n = { git = "https://github.com/storytold/craft-libs", rev = "90e14375a4a461fb42eba802846250b2473366f7" }
+craft-tracked = { git = "https://github.com/storytold/craft-libs", rev = "90e14375a4a461fb42eba802846250b2473366f7" }
+craft-host = { git = "https://github.com/storytold/craft-libs", rev = "90e14375a4a461fb42eba802846250b2473366f7" }
+craft-window = { git = "https://github.com/storytold/craft-libs", rev = "90e14375a4a461fb42eba802846250b2473366f7" }
+craft-theme = { git = "https://github.com/storytold/craft-libs", rev = "90e14375a4a461fb42eba802846250b2473366f7" }
+
+# GUI (one egui: patched to the craft-libs fork below)
+eframe = { version = "0.37", default-features = false }
+egui = { version = "0.37", default-features = false }
+egui_extras = { version = "0.37", default-features = false }
+
+# Formats (MIT / Apache-2.0 / BSD, pure Rust)
+zip = { version = "9.8", default-features = false, features = ["aes-crypto", "deflate", "deflate64", "lzma", "xz", "bzip2", "ppmd", "chrono"] }
+sevenz-rust2 = { version = "0.26", default-features = false, features = ["aes256", "compress", "bzip2", "ppmd", "util", "deflate"] }
+lzma-rust2 = "0.26"
+tar = "0.4"
+flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
+ruzstd = "0.9"
+# RAR: read-only, optional. Only the reading API is used; the crate's "write" feature stays off.
+rars = { version = "0.13", default-features = false, features = ["encryption"] }
+
+# Support
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "webp", "ico"] }
+chrono = "0.4"
+clap = { version = "4.6", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "7"
+tempfile = "3"
+md-5 = "0.11"
+crc32fast = "1.5"
+trash = "5.4"
+web-time = "1.1"
+winit = { version = "0.30", default-features = false }
+drag = "2.1"
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+lto = "thin"
+
+# The same [patch.crates-io] egui/winit block (same revisions) as craft-libs at the pinned rev,
+# so the build has exactly one egui.
+[patch.crates-io]
+ecolor = { git = "https://github.com/storytold/egui.git", rev = "b9770908e0f304896f9658d239a7b29cf8af1564" }
+emath = { git = "https://github.com/storytold/egui.git", rev = "b9770908e0f304896f9658d239a7b29cf8af1564" }
+epaint = { git = "https://github.com/storytold/egui.git", rev = "b9770908e0f304896f9658d239a7b29cf8af1564" }
+epaint_default_fonts = { git = "https://github.com/storytold/egui.git", rev = "b9770908e0f304896f9658d239a7b29cf8af1564" }
+egui = { git = "https://github.com/storytold/egui.git", rev = "b9770908e0f304896f9658d239a7b29cf8af1564" }
+egui-winit = { git = "https://github.com/storytold/egui.git", rev = "b9770908e0f304896f9658d239a7b29cf8af1564" }
+egui-wgpu = { git = "https://github.com/storytold/egui.git", rev = "b9770908e0f304896f9658d239a7b29cf8af1564" }
+egui_glow = { git = "https://github.com/storytold/egui.git", rev = "b9770908e0f304896f9658d239a7b29cf8af1564" }
+egui_extras = { git = "https://github.com/storytold/egui.git", rev = "b9770908e0f304896f9658d239a7b29cf8af1564" }
+egui_kittest = { git = "https://github.com/storytold/egui.git", rev = "b9770908e0f304896f9658d239a7b29cf8af1564" }
+egui_system_font_provider = { git = "https://github.com/storytold/egui.git", rev = "b9770908e0f304896f9658d239a7b29cf8af1564" }
+eframe = { git = "https://github.com/storytold/egui.git", rev = "b9770908e0f304896f9658d239a7b29cf8af1564" }
+egui_demo_lib = { git = "https://github.com/storytold/egui.git", rev = "b9770908e0f304896f9658d239a7b29cf8af1564" }
+egui_inspection = { git = "https://github.com/storytold/egui.git", rev = "b9770908e0f304896f9658d239a7b29cf8af1564" }
+winit = { git = "https://github.com/storytold/winit.git", rev = "a517b3846ee8457d84ee4975110bfda6797c44dc" }

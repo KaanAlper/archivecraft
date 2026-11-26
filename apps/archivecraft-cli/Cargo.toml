@@ -1,0 +1,15 @@
+[package]
+name = "archivecraft-cli"
+description = "ArchiveCraft from the command line: create, list, test, extract, delete, convert and repair archives"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+rar = ["archivecraft-engine/rar"]
+
+[dependencies]
+archivecraft-engine = { workspace = true }
+clap = { workspace = true }

@@ -1,0 +1,27 @@
+[package]
+name = "archivecraft-formats"
+description = "ArchiveCraft archive formats: ZIP, 7z, tar, tar.gz, tar.xz, tar.zst and read-only RAR"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+# Extract-only RAR through the Apache-2.0 `rars` crate. Off by default.
+rar = ["dep:rars", "archivecraft-model/rar"]
+
+[dependencies]
+archivecraft-model = { workspace = true }
+zip = { workspace = true }
+sevenz-rust2 = { workspace = true }
+lzma-rust2 = { workspace = true }
+tar = { workspace = true }
+flate2 = { workspace = true }
+ruzstd = { workspace = true }
+rars = { workspace = true, optional = true }
+chrono = { workspace = true }
+tempfile = { workspace = true }
+
+[dev-dependencies]
+crc32fast = { workspace = true }

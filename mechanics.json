@@ -1,0 +1,287 @@
+{
+ "version": 1,
+ "values": [
+  {
+   "name": "default compression level",
+   "group": "packing",
+   "value": 5,
+   "estimated": true,
+   "source": "own choice; reference/02-add-general.png shows a middle setting as default"
+  },
+  {
+   "name": "compression levels offered",
+   "group": "packing",
+   "value": "0,1,3,5,7,9",
+   "estimated": true,
+   "source": "own choice"
+  },
+  {
+   "name": "default archive type",
+   "group": "packing",
+   "value": "ZIP",
+   "source": "own choice (the target's own format is out of scope, reference/README.md)"
+  },
+  {
+   "name": "default update mode",
+   "group": "packing",
+   "value": "add and replace",
+   "source": "reference/02-add-general.png, reference/51-add-update-mode-list.png"
+  },
+  {
+   "name": "update modes",
+   "group": "packing",
+   "value": "add&replace, update newer, freshen, ask, skip existing, mirror",
+   "source": "reference/51-add-update-mode-list.png"
+  },
+  {
+   "name": "default path mode",
+   "group": "packing",
+   "value": "relative",
+   "source": "reference/05-add-files.png"
+  },
+  {
+   "name": "store modification time",
+   "group": "packing",
+   "value": true,
+   "source": "reference/07-add-time.png"
+  },
+  {
+   "name": "default recovery data",
+   "group": "packing",
+   "value": 3,
+   "unit": "%",
+   "source": "reference/03-add-advanced.png"
+  },
+  {
+   "name": "PAR2 target slice count",
+   "group": "packing",
+   "value": 2000,
+   "unit": "slices",
+   "estimated": true,
+   "source": "estimated"
+  },
+  {
+   "name": "PAR2 minimum slice size",
+   "group": "packing",
+   "value": 512,
+   "unit": "bytes",
+   "estimated": true,
+   "source": "estimated"
+  },
+  {
+   "name": "split size presets",
+   "group": "packing",
+   "value": "10 MB, 100 MB, 700 MB, 4092 MB",
+   "estimated": true,
+   "source": "own choice"
+  },
+  {
+   "name": "default overwrite rule",
+   "group": "unpacking",
+   "value": "ask",
+   "source": "reference/09-extract-general.png"
+  },
+  {
+   "name": "default unpack mode",
+   "group": "unpacking",
+   "value": "unpack everything",
+   "source": "reference/09-extract-general.png"
+  },
+  {
+   "name": "set file times on unpack",
+   "group": "unpacking",
+   "value": true,
+   "source": "reference/10-extract-advanced.png"
+  },
+  {
+   "name": "delete archive after unpack",
+   "group": "unpacking",
+   "value": "never",
+   "source": "reference/10-extract-advanced.png"
+  },
+  {
+   "name": "ZIP time tolerance for 'newer'",
+   "group": "unpacking",
+   "value": 2,
+   "unit": "s",
+   "source": "ZIP stores two-second times (format)"
+  },
+  {
+   "name": "preview size limit",
+   "group": "viewer",
+   "value": 64,
+   "unit": "MB",
+   "estimated": true,
+   "source": "estimated"
+  },
+  {
+   "name": "hex dump limit",
+   "group": "viewer",
+   "value": 64,
+   "unit": "KB",
+   "estimated": true,
+   "source": "estimated"
+  },
+  {
+   "name": "threads default",
+   "group": "system",
+   "value": "CPU cores",
+   "source": "reference/24-settings-system.png shows a per-machine count"
+  },
+  {
+   "name": "recent archives kept",
+   "group": "history",
+   "value": 12,
+   "estimated": true,
+   "source": "estimated"
+  },
+  {
+   "name": "window size",
+   "group": "window",
+   "value": "1000x640",
+   "unit": "px",
+   "estimated": true,
+   "source": "estimated"
+  },
+  {
+   "name": "minimum window size",
+   "group": "window",
+   "value": "640x400",
+   "unit": "px",
+   "estimated": true,
+   "source": "estimated"
+  },
+  {
+   "name": "toolbar buttons",
+   "group": "window",
+   "value": "Add, Extract, Test, View, Delete, Search, Guide, Info | Repair (+ Note for ZIP)",
+   "source": "reference/01-main-window.png, reference/31-archive-open.png (own wording)"
+  },
+  {
+   "name": "toolbar icon size large/small",
+   "group": "window",
+   "value": "30 / 20",
+   "unit": "px",
+   "estimated": true,
+   "source": "estimated"
+  },
+  {
+   "name": "list columns on disk",
+   "group": "window",
+   "value": "Name, Size, Packed, Type, Modified",
+   "source": "request + reference/01-main-window.png"
+  },
+  {
+   "name": "extra column in archives",
+   "group": "window",
+   "value": "Checksum (CRC32)",
+   "source": "reference/31-archive-open.png"
+  },
+  {
+   "name": "list row height",
+   "group": "window",
+   "value": 22,
+   "unit": "px",
+   "estimated": true,
+   "source": "estimated"
+  },
+  {
+   "name": "status note shown for",
+   "group": "window",
+   "value": 8,
+   "unit": "s",
+   "estimated": true,
+   "source": "estimated"
+  },
+  {
+   "name": "double-click opens",
+   "group": "controls",
+   "value": true,
+   "source": "reference/27-settings-file-list.png"
+  },
+  {
+   "name": "open archive",
+   "group": "controls",
+   "value": "Ctrl+O",
+   "estimated": true,
+   "source": "own choice"
+  },
+  {
+   "name": "add",
+   "group": "controls",
+   "value": "Ctrl+Shift+A",
+   "estimated": true,
+   "source": "own choice"
+  },
+  {
+   "name": "extract",
+   "group": "controls",
+   "value": "Ctrl+E",
+   "estimated": true,
+   "source": "own choice"
+  },
+  {
+   "name": "extract here",
+   "group": "controls",
+   "value": "Ctrl+Shift+E",
+   "estimated": true,
+   "source": "own choice"
+  },
+  {
+   "name": "test",
+   "group": "controls",
+   "value": "Ctrl+T",
+   "estimated": true,
+   "source": "own choice"
+  },
+  {
+   "name": "view",
+   "group": "controls",
+   "value": "F3",
+   "estimated": true,
+   "source": "own choice"
+  },
+  {
+   "name": "delete",
+   "group": "controls",
+   "value": "Delete",
+   "estimated": true,
+   "source": "own choice"
+  },
+  {
+   "name": "info",
+   "group": "controls",
+   "value": "Ctrl+I",
+   "estimated": true,
+   "source": "own choice"
+  },
+  {
+   "name": "search",
+   "group": "controls",
+   "value": "Ctrl+F",
+   "estimated": true,
+   "source": "own choice"
+  },
+  {
+   "name": "up one level",
+   "group": "controls",
+   "value": "Backspace",
+   "estimated": true,
+   "source": "own choice"
+  },
+  {
+   "name": "select by pattern / unselect",
+   "group": "controls",
+   "value": "+ / -",
+   "estimated": true,
+   "source": "own choice"
+  },
+  {
+   "name": "screenshot after",
+   "group": "checks",
+   "value": 120,
+   "unit": "frames",
+   "source": "Craft Anything instructions"
+  }
+ ]
+}
